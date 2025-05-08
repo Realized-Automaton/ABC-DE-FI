@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -26,7 +25,7 @@ interface DeFiDegenGameProps {
 // --- Game Data Types ---
 type TokenSymbol = 'GARBAGE' | 'CLOWN' | 'SAFE' | 'XYZ';
 
-// Add an 'id' field to GameEvent for tracking uniqueness
+// Add flags for deterministic outcomes
 interface GameEvent {
     id: number; // Unique identifier for the event
     type: 'rumor' | 'tweet' | 'marketShift' | 'scamOpportunity' | 'news' | 'nftOpportunity' | 'daoDrama' | 'exploit' | 'utilityLaunch' | 'microcap';
@@ -36,15 +35,18 @@ interface GameEvent {
     potentialGain?: string;
     actionOptions?: string[];
     sentimentEffect?: GameState['marketSentiment'];
-    isHighRisk?: boolean;
+    isHighRisk?: boolean; // Still useful for context/XP? Or remove if purely deterministic
+    isGuaranteedLoss?: boolean; // Flag for events that *always* result in loss if invested
+    isGuaranteedProfit?: boolean; // Flag for events that *always* result in profit if invested (less common)
+    profitMultiplier?: number; // Represents the total return factor (e.g., 2.5 means 2.5x return, or 1.5x profit)
     subtleClue?: string;
-    delayedEffect?: boolean;
+    delayedEffect?: boolean; // Still useful for context/narrative
 }
 
 interface GameOutcomeEvent {
     type: 'positive' | 'negative' | 'neutral';
     description: string;
-    profit?: number;
+    profit?: number; // Profit is positive, loss is negative
 }
 
 
@@ -78,39 +80,43 @@ const INITIAL_STATE: GameState = {
 };
 
 // --- Mock Data & Helpers ---
-// Added unique 'id' to each event
+// Adjusted profitMultiplier values for higher potential gains and more favorable balance
 const MOCK_EVENTS: Omit<GameEvent, 'actionOptions'>[] = [
-    { id: 1, type: 'rumor', title: 'Rumor Mill: New Altcoin Gaining Traction', description: 'Whispers on CryptoX suggest a new altcoin could be the next big thing. Dev wallet holds 50% of supply.', potentialGain: '5x-10x?', isHighRisk: true, subtleClue: 'High dev wallet concentration often signals centralization risk or potential dump.' },
-    { id: 2, type: 'tweet', title: 'Influencer Tweet: Promising Project Alert!', description: 'A popular crypto influencer is hyping a new project with ambitious goals. DYOR!', potentialGain: '100x (maybe)', isHighRisk: true, subtleClue: 'Influencer hype without substance often leads to pump-and-dumps. Verify the claims.' },
-    { id: 3, type: 'marketShift', title: 'Market Jitters', description: 'Uncertainty looms as regulatory discussions intensify. Market sentiment showing signs of turning bearish.', sentimentEffect: 'bearish', subtleClue: 'Investing during market uncertainty or "jitters" is often risky as sentiment can sour quickly. Bear markets are born in euphoria and bull markets in depression.' },
-    { id: 4, type: 'scamOpportunity', title: 'Exclusive Presale Invitation', description: 'An opportunity to invest in a promising new token before it hits the market. Limited spots available! Contract unverified.', isHighRisk: true, subtleClue: 'Unverified contracts are extremely risky and a common sign of scams.' },
-    { id: 5, type: 'rumor', title: 'Tech Breakthrough Announced', description: 'Reports of a significant technological advancement in a lesser-known project emerge. Seems legit?', token: 'GARBAGE', isHighRisk: false, subtleClue: 'Genuine tech advancements can drive value, assuming the report is accurate.' },
-    { id: 6, type: 'marketShift', title: 'Market Euphoria!', description: 'Green candles everywhere! A wave of optimism sweeps through the crypto space.', sentimentEffect: 'euphoric', subtleClue: 'Extreme euphoria often signals a market top. Buying during peak hype is very risky (Exit Liquidity). Bear markets are born in euphoria.' },
-    { id: 7, type: 'news', title: 'Major Exchange Lists $SAFE', description: '$SAFE token has just been listed on a top-tier exchange! Price jumped 30% in the last hour.', token: 'SAFE', delayedEffect: true, isHighRisk: true, subtleClue: 'Investing *after* a major listing pump ("sell the news") can be dangerous as early investors take profits.' },
-    { id: 8, type: 'tweet', title: 'Elon Mentions Altcoin Project (Yesterday!)', description: 'Elon Musk tweeted about an altcoin yesterday, causing a massive pump. Is it too late to get in?', potentialGain: '???', isHighRisk: true, delayedEffect: true, subtleClue: 'Chasing pumps based on old news (even celebrity tweets) is often a losing strategy.' },
-    { id: 9, type: 'news', title: 'Project Audit Results Released', description: 'Project CLOWNCHAIN passed its security audit! Report looks clean.', token: 'CLOWN', isHighRisk: false, delayedEffect: false, subtleClue: 'A successful audit from a reputable firm reduces security risks, but doesn\'t guarantee price appreciation.' },
-    { id: 10, type: 'scamOpportunity', title: 'Yield Farm Offering 1000% APY', description: 'New farm just launched offering insane returns on $XYZ staking. Deposit requires approving unlimited token spend.', potentialGain: '1000% APY!', isHighRisk: true, subtleClue: 'Unsustainably high APYs and requests for unlimited token approvals are major red flags for scams.' },
-    { id: 11, type: 'marketShift', title: 'Massive Liquidation Cascade', description: 'Panic selling triggers a cascade of liquidations across major platforms. Sentiment is rock bottom.', sentimentEffect: 'panic', subtleClue: 'Panic selling can present buying opportunities ("buy the dip" or "buy when there is blood in the streets"), but timing is critical and risky. Ensure the project fundamentals remain sound. Bull markets are often born in depression like this.' },
-    { id: 12, type: 'nftOpportunity', title: 'Hyped NFT Mint LIVE!', description: 'A new PFP project with huge Discord buzz is minting now! Floor could 10x, or go to zero.', potentialGain: '10x?', isHighRisk: true, delayedEffect: true, subtleClue: 'NFT mints are highly volatile. Success often depends on timing, overall market sentiment, and team execution, not just hype.' },
-    { id: 13, type: 'nftOpportunity', title: 'NFT Floor Price Speculation', description: 'Talk of a major influencer sweeping the floor of the "Bored YC Kittens" collection. Maybe pump incoming?', isHighRisk: true, delayedEffect: true, subtleClue: 'Speculating on NFT floor prices based on rumors is extremely risky and akin to gambling.' },
-    { id: 14, type: 'nftOpportunity', title: '"Free" NFT Claim Available', description: 'Claim your free commemorative NFT by connecting your wallet and signing the transaction. Looks legit?', isHighRisk: true, subtleClue: '"Free" mints requiring transaction signing (especially approvals) are often wallet drainer scams.' },
-    { id: 15, type: 'exploit', title: 'Protocol Hack Reported', description: 'Breaking news: A popular DeFi protocol has been exploited. Token price is tanking.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, subtleClue: 'Investing in hacked projects, even after a price drop, is very risky until the vulnerability is fixed and funds are potentially recovered.' },
-    { id: 16, type: 'rumor', title: 'Partnership Speculation', description: 'Rumors swirling about a potential partnership between Project CLOWNCHAIN and a major tech company.', token: 'CLOWN', isHighRisk: false, delayedEffect: true, subtleClue: 'Partnership rumors can pump prices, but gains often fade if the partnership isn\'t confirmed or impactful ("buy the rumor, sell the news").' },
-    { id: 17, type: 'marketShift', title: 'Stablecoin Depegs Slightly', description: 'A major stablecoin briefly lost its peg, causing some market instability.', sentimentEffect: 'bearish', subtleClue: 'Stablecoin depegs can cause widespread panic and negatively impact even unrelated assets due to loss of confidence.' },
-    { id: 18, type: 'daoDrama', title: 'Dev Threatens to Fork', description: 'Lead developer of GARBAGECOIN is threatening to fork the project after a community disagreement.', token: 'GARBAGE', isHighRisk: true, subtleClue: 'Internal project conflicts and fork threats often negatively impact token price due to uncertainty and division.' },
-    { id: 19, type: 'scamOpportunity', title: 'Telegram "Signal Group" Tip', description: 'Got a "guaranteed 5x" signal from a private Telegram group. Requires buying a low-cap token immediately.', isHighRisk: true, subtleClue: 'Paid "signal groups" are often pump-and-dump schemes orchestrating exit liquidity for insiders.' },
-    { id: 20, type: 'news', title: 'New Regulation Proposed', description: 'Governments are discussing new regulations for DeFi. Market is reacting cautiously.', sentimentEffect: 'neutral', subtleClue: 'Regulatory news can create long-term uncertainty or opportunity. The impact depends heavily on the specifics of the regulation.' },
-    // --- New Events (ID 21-30) ---
-    { id: 21, type: 'utilityLaunch', title: 'Project XYZ Launches Mainnet App', description: 'After months of development, Project XYZ has launched its utility application on mainnet.', token: 'XYZ', isHighRisk: false, subtleClue: 'Successful mainnet launches *can* drive price if the utility gains adoption, but often the hype is already priced in.' },
-    { id: 22, type: 'microcap', title: 'New Microcap Gem? (100k Mcap)', description: 'Found a token with a tiny market cap. Devs seem active on Telegram. Could this be the next 1000x?', potentialGain: '1000x?', isHighRisk: true, subtleClue: 'Extremely low market cap tokens are highly volatile and susceptible to manipulation or abandonment ("rug pull"). Risk is immense.' },
-    { id: 23, type: 'exploit', title: 'Flash Loan Exploit on DEX', description: 'A DEX pool involving $SAFE was just exploited using a flash loan, manipulating the price temporarily.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, subtleClue: 'Flash loan exploits can cause extreme, temporary price volatility. Trading during such events is dangerous.' },
-    { id: 24, type: 'daoDrama', title: 'DAO Treasury Debate Heated', description: 'Major disagreement in the GARBAGECOIN DAO over how to spend treasury funds. Contentious vote upcoming.', token: 'GARBAGE', isHighRisk: true, subtleClue: 'Contentious DAO governance can signal instability and potentially lead to negative price action or forks.' },
-    { id: 25, type: 'rumor', title: 'Token Unlock Approaching', description: 'Large token unlock schedule for early investors of $CLOWN is coming next week.', token: 'CLOWN', isHighRisk: true, delayedEffect: true, subtleClue: 'Large token unlocks often lead to selling pressure as early investors cash out, potentially decreasing the price.' },
-    { id: 26, type: 'tweet', title: 'Mysterious Dev Tweet', description: 'Lead dev of $XYZ tweeted a cryptic message: "Big things coming. Phase 2 imminent." Vague!', token: 'XYZ', isHighRisk: true, subtleClue: 'Vague, hype-driven tweets without concrete details are often used to pump prices short-term. Be wary of "announcements of announcements".' },
-    { id: 27, type: 'nftOpportunity', title: 'NFT Project "Migrates" to V2', description: 'The "Sad Shibas" NFT project announced a V2 migration. Holders need to burn V1 and mint V2. Some fees apply.', isHighRisk: true, subtleClue: 'V2 migrations can sometimes be legitimate upgrades, but are also used as tactics in slow rug pulls or cash grabs. Investigate the reasons and fees.' },
-    { id: 28, type: 'scamOpportunity', title: 'Airdrop Claim Requires Seed Phrase', description: 'A website claims you\'re eligible for a huge $SAFE airdrop, but requires entering your seed phrase to verify.', isHighRisk: true, potentialGain: 'Free Tokens!', subtleClue: 'NEVER enter your seed phrase on any website. This is ALWAYS a scam to steal your funds.' },
-    { id: 29, type: 'news', title: 'Competitor Project Gains Traction', description: 'A major competitor to Project CLOWNCHAIN seems to be gaining significant user adoption.', token: 'CLOWN', isHighRisk: true, subtleClue: 'Strong competition can negatively impact a project\'s market share and token price if they fail to innovate or retain users.' },
-    { id: 30, type: 'marketShift', title: 'Fear & Greed Index at "Extreme Fear"', description: 'The Crypto Fear & Greed Index has dropped to "Extreme Fear" levels amidst market declines.', sentimentEffect: 'panic', isHighRisk: true, subtleClue: '"Extreme Fear" can indicate maximum pessimism, potentially signaling a market bottom (Contrarian Indicator). Buying here is risky but can be rewarding.' },
+    // Negative / Loss Events (Keep scams punishing)
+    { id: 2, type: 'tweet', title: 'Influencer Tweet: Promising Project Alert!', description: 'A popular crypto influencer is hyping a new project with ambitious goals. DYOR!', potentialGain: '100x (maybe)', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Influencer hype without substance often leads to pump-and-dumps. Verify the claims.' }, // Guaranteed loss - chasing hype
+    { id: 4, type: 'scamOpportunity', title: 'Exclusive Presale Invitation', description: 'An opportunity to invest in a promising new token before it hits the market. Limited spots available! Contract unverified.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Unverified contracts are extremely risky and a common sign of scams.' },
+    { id: 7, type: 'news', title: 'Major Exchange Lists $SAFE', description: '$SAFE token has just been listed on a top-tier exchange! Price jumped 30% in the last hour.', token: 'SAFE', delayedEffect: true, isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Investing *after* a major listing pump ("sell the news") can be dangerous as early investors take profits.' },
+    { id: 8, type: 'tweet', title: 'Elon Mentions Altcoin Project (Yesterday!)', description: 'Elon Musk tweeted about an altcoin yesterday, causing a massive pump. Is it too late to get in?', potentialGain: '???', isHighRisk: true, delayedEffect: true, isGuaranteedLoss: true, subtleClue: 'Chasing pumps based on old news (even celebrity tweets) is often a losing strategy.' },
+    { id: 10, type: 'scamOpportunity', title: 'Yield Farm Offering 1000% APY', description: 'New farm just launched offering insane returns on $XYZ staking. Deposit requires approving unlimited token spend.', potentialGain: '1000% APY!', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Unsustainably high APYs and requests for unlimited token approvals are major red flags for scams.' },
+    { id: 13, type: 'nftOpportunity', title: 'NFT Floor Price Speculation', description: 'Talk of a major influencer sweeping the floor of the "Bored YC Kittens" collection. Maybe pump incoming?', isHighRisk: true, delayedEffect: true, isGuaranteedLoss: true, subtleClue: 'Speculating on NFT floor prices based on rumors is extremely risky and akin to gambling.' },
+    { id: 14, type: 'nftOpportunity', title: '"Free" NFT Claim Available', description: 'Claim your free commemorative NFT by connecting your wallet and signing the transaction. Looks legit?', isHighRisk: true, isGuaranteedLoss: true, subtleClue: '"Free" mints requiring transaction signing (especially approvals) are often wallet drainer scams.' },
+    { id: 15, type: 'exploit', title: 'Protocol Hack Reported', description: 'Breaking news: A popular DeFi protocol has been exploited. Token price is tanking.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Investing in hacked projects, even after a price drop, is very risky until the vulnerability is fixed and funds are potentially recovered.' },
+    { id: 18, type: 'daoDrama', title: 'Dev Threatens to Fork', description: 'Lead developer of GARBAGECOIN is threatening to fork the project after a community disagreement.', token: 'GARBAGE', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Internal project conflicts and fork threats often negatively impact token price due to uncertainty and division.' },
+    { id: 19, type: 'scamOpportunity', title: 'Telegram "Signal Group" Tip', description: 'Got a "guaranteed 5x" signal from a private Telegram group. Requires buying a low-cap token immediately.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Paid "signal groups" are often pump-and-dump schemes orchestrating exit liquidity for insiders.' },
+    { id: 22, type: 'microcap', title: 'New Microcap Gem? (100k Mcap)', description: 'Found a token with a tiny market cap. Devs seem active on Telegram. Could this be the next 1000x?', potentialGain: '1000x?', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Extremely low market cap tokens are highly volatile and susceptible to manipulation or abandonment ("rug pull"). Risk is immense.' }, // Often rugs
+    { id: 23, type: 'exploit', title: 'Flash Loan Exploit on DEX', description: 'A DEX pool involving $SAFE was just exploited using a flash loan, manipulating the price temporarily.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Flash loan exploits can cause extreme, temporary price volatility. Trading during such events is dangerous.' },
+    { id: 24, type: 'daoDrama', title: 'DAO Treasury Debate Heated', description: 'Major disagreement in the GARBAGECOIN DAO over how to spend treasury funds. Contentious vote upcoming.', token: 'GARBAGE', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Contentious DAO governance can signal instability and potentially lead to negative price action or forks.' },
+    { id: 25, type: 'rumor', title: 'Token Unlock Approaching', description: 'Large token unlock schedule for early investors of $CLOWN is coming next week.', token: 'CLOWN', isHighRisk: true, delayedEffect: true, isGuaranteedLoss: true, subtleClue: 'Large token unlocks often lead to selling pressure as early investors cash out, potentially decreasing the price.' },
+    { id: 27, type: 'nftOpportunity', title: 'NFT Project "Migrates" to V2', description: 'The "Sad Shibas" NFT project announced a V2 migration. Holders need to burn V1 and mint V2. Some fees apply.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'V2 migrations can sometimes be legitimate upgrades, but are also used as tactics in slow rug pulls or cash grabs. Investigate the reasons and fees.' },
+    { id: 28, type: 'scamOpportunity', title: 'Airdrop Claim Requires Seed Phrase', description: 'A website claims you\'re eligible for a huge $SAFE airdrop, but requires entering your seed phrase to verify.', isHighRisk: true, potentialGain: 'Free Tokens!', isGuaranteedLoss: true, subtleClue: 'NEVER enter your seed phrase on any website. This is ALWAYS a scam to steal your funds.' },
+    { id: 29, type: 'news', title: 'Competitor Project Gains Traction', description: 'A major competitor to Project CLOWNCHAIN seems to be gaining significant user adoption.', token: 'CLOWN', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Strong competition can negatively impact a project\'s market share and token price if they fail to innovate or retain users.' },
+    { id: 6, type: 'marketShift', title: 'Market Euphoria!', description: 'Green candles everywhere! A wave of optimism sweeps through the crypto space.', sentimentEffect: 'euphoric', subtleClue: 'Extreme euphoria often signals a market top. Buying during peak hype is very risky (Exit Liquidity). Bear markets are born in euphoria.' }, // Investing here is a loss
+
+    // Positive / Potential Profit Events (Increased multipliers)
+    { id: 1, type: 'rumor', title: 'Rumor Mill: New Altcoin Gaining Traction', description: 'Whispers on CryptoX suggest a new altcoin could be the next big thing. Dev wallet holds 50% of supply.', potentialGain: '5x-10x?', isHighRisk: true, profitMultiplier: 2.5, subtleClue: 'High dev wallet concentration often signals centralization risk or potential dump.' }, // Increased multiplier (2.5x return -> 1.5x profit)
+    { id: 5, type: 'rumor', title: 'Tech Breakthrough Announced', description: 'Reports of a significant technological advancement in a lesser-known project emerge. Seems legit?', token: 'GARBAGE', isHighRisk: false, profitMultiplier: 2.0, subtleClue: 'Genuine tech advancements can drive value, assuming the report is accurate.' }, // Increased multiplier (2x return -> 1x profit)
+    { id: 9, type: 'news', title: 'Project Audit Results Released', description: 'Project CLOWNCHAIN passed its security audit! Report looks clean.', token: 'CLOWN', isHighRisk: false, delayedEffect: false, isGuaranteedProfit: true, profitMultiplier: 1.2, subtleClue: 'A successful audit from a reputable firm reduces security risks, but doesn\'t guarantee price appreciation. Small profit potential.' }, // Modest but safer profit (1.2x return -> 0.2x profit)
+    { id: 11, type: 'marketShift', title: 'Massive Liquidation Cascade', description: 'Panic selling triggers a cascade of liquidations across major platforms. Sentiment is rock bottom.', sentimentEffect: 'panic', subtleClue: 'Panic selling can present buying opportunities ("buy the dip" or "buy when there is blood in the streets"), but timing is critical and risky. Ensure the project fundamentals remain sound. Bull markets are often born in depression like this.' }, // Investing here *could* be positive -> High reward potential defined later (Multiplier boosted in logic)
+    { id: 12, type: 'nftOpportunity', title: 'Hyped NFT Mint LIVE!', description: 'A new PFP project with huge Discord buzz is minting now! Floor could 10x, or go to zero.', potentialGain: '10x?', isHighRisk: true, delayedEffect: true, profitMultiplier: 4.0, subtleClue: 'NFT mints are highly volatile. Success often depends on timing, overall market sentiment, and team execution, not just hype.' }, // Increased multiplier significantly (4x return -> 3x profit)
+    { id: 16, type: 'rumor', title: 'Partnership Speculation', description: 'Rumors swirling about a potential partnership between Project CLOWNCHAIN and a major tech company.', token: 'CLOWN', isHighRisk: false, delayedEffect: true, profitMultiplier: 1.8, subtleClue: 'Partnership rumors can pump prices, but gains often fade if the partnership isn\'t confirmed or impactful ("buy the rumor, sell the news").' }, // Increased multiplier (1.8x return -> 0.8x profit)
+    { id: 21, type: 'utilityLaunch', title: 'Project XYZ Launches Mainnet App', description: 'After months of development, Project XYZ has launched its utility application on mainnet.', token: 'XYZ', isHighRisk: false, isGuaranteedProfit: true, profitMultiplier: 1.5, subtleClue: 'Successful mainnet launches *can* drive price if the utility gains adoption, but often the hype is already priced in.' }, // Increased multiplier (1.5x return -> 0.5x profit)
+    { id: 26, type: 'tweet', title: 'Mysterious Dev Tweet', description: 'Lead dev of $XYZ tweeted a cryptic message: "Big things coming. Phase 2 imminent." Vague!', token: 'XYZ', isHighRisk: true, profitMultiplier: 1.6, subtleClue: 'Vague, hype-driven tweets without concrete details are often used to pump prices short-term. Be wary of "announcements of announcements".' }, // Increased multiplier (1.6x return -> 0.6x profit)
+    { id: 30, type: 'marketShift', title: 'Fear & Greed Index at "Extreme Fear"', description: 'The Crypto Fear & Greed Index has dropped to "Extreme Fear" levels amidst market declines.', sentimentEffect: 'panic', isHighRisk: true, profitMultiplier: 2.8, subtleClue: '"Extreme Fear" can indicate maximum pessimism, potentially signaling a market bottom (Contrarian Indicator). Buying here is risky but can be rewarding.' }, // Increased multiplier for contrarian play (2.8x return -> 1.8x profit)
+
+    // Neutral / Context Events (Outcome depends on action/sentiment)
+    { id: 3, type: 'marketShift', title: 'Market Jitters', description: 'Uncertainty looms as regulatory discussions intensify. Market sentiment showing signs of turning bearish.', sentimentEffect: 'bearish', subtleClue: 'Investing during market uncertainty or "jitters" is often risky as sentiment can sour quickly. Bear markets are born in euphoria and bull markets in depression.' }, // Outcome depends on action/sentiment -> negative outcome defined later (slight loss)
+    { id: 17, type: 'marketShift', title: 'Stablecoin Depegs Slightly', description: 'A major stablecoin briefly lost its peg, causing some market instability.', sentimentEffect: 'bearish', subtleClue: 'Stablecoin depegs can cause widespread panic and negatively impact even unrelated assets due to loss of confidence.' }, // Neutral outcome for this specific event (investing = small loss)
+    { id: 20, type: 'news', title: 'New Regulation Proposed', description: 'Governments are discussing new regulations for DeFi. Market is reacting cautiously.', sentimentEffect: 'neutral', subtleClue: 'Regulatory news can create long-term uncertainty or opportunity. The impact depends heavily on the specifics of the regulation.' }, // Neutral outcome (investing = small gain/loss)
 ];
 
 
@@ -234,7 +240,12 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
 
          // 4. Calculate current portfolio value and update history
          const currentTotalValue = currentState.balance; // Value is just the balance now
-         const newHistory = [...currentState.history, { day: nextDay, value: currentTotalValue }];
+         // Ensure we don't duplicate day 0 if restarting
+         const historyBase = currentState.history.length > 1 && currentState.history[currentState.history.length-1].day === currentState.day
+                             ? currentState.history.slice(0, -1)
+                             : currentState.history;
+         const newHistory = [...historyBase, { day: nextDay, value: currentTotalValue }];
+
 
 
          setGameState(prev => ({
@@ -250,167 +261,170 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
          }));
      };
 
-     const handlePlayerAction = (action: string) => {
-         const event = gameState.currentEvent;
-         if (!event || !event.actionOptions?.includes(action)) return;
+    // --- Refactored handlePlayerAction for deterministic outcomes ---
+    const handlePlayerAction = (action: string) => {
+        const event = gameState.currentEvent;
+        if (!event || !event.actionOptions?.includes(action)) return;
 
-         let statusUpdate: string | null = `Day ${gameState.day}: You chose to ${action}.`;
-         let newBalance = gameState.balance;
-         let newPonziScore = gameState.ponziScore;
-         let outcome: GameOutcomeEvent | null = null;
+        let statusUpdate: string | null = `Day ${gameState.day}: You chose to ${action}.`;
+        let newBalance = gameState.balance;
+        let newPonziScore = gameState.ponziScore;
+        let outcome: GameOutcomeEvent | null = null;
 
-         // Amount to invest based on slider and balance
-         const investmentAmount = gameState.balance * (investmentPercentage / 100);
+        const investmentAmount = gameState.balance * (investmentPercentage / 100);
+        const feedbackClue = event.subtleClue ? ` Hint: ${event.subtleClue}` : "";
 
-         // --- Shared Logic for Determining Outcome ---
-         let profitMultiplier = 0;
-         let lossFactor = 0;
-         let potentialOutcomeType: GameOutcomeEvent['type'] = 'negative'; // Default to negative
+        // --- Determine Outcome ---
+        let isSuccess = false; // Default to failure/neutral
+        let profit = 0; // Default profit/loss is 0
 
-         // Base chance of failure, higher for risky events
-         const baseFailureChance = event.isHighRisk ? 0.40 : 0.15;
-         let failureChance = baseFailureChance;
-         if (event.delayedEffect) failureChance += 0.20;
+        if (action === 'Invest') {
+            if (investmentAmount <= 0) {
+                statusUpdate += ' Selected 0% to invest.';
+                outcome = { type: 'neutral', description: `You observed the event but chose not to invest any DAI.` };
+            } else if (newBalance < investmentAmount) {
+                statusUpdate += ' Not enough balance!';
+                outcome = { type: 'neutral', description: `Insufficient funds to invest $${investmentAmount.toFixed(2)} DAI.` };
+            } else {
+                // --- Investment Logic ---
+                let outcomeType: GameOutcomeEvent['type'] = 'negative'; // Default to negative for investments
 
-         // Adjust failure chance based on market sentiment (opposite of original request for realism)
-         if (gameState.marketSentiment === 'panic') failureChance += 0.25; // Higher risk in panic
-         if (gameState.marketSentiment === 'bearish') failureChance += 0.10;
-         if (gameState.marketSentiment === 'euphoric') failureChance += 0.30; // Higher risk in euphoria (buying tops)
-         if (gameState.marketSentiment === 'bullish') failureChance -= 0.05; // Lower risk in bullish market
-         failureChance = Math.max(0.05, Math.min(0.95, failureChance)); // Clamp chance between 5% and 95%
+                // 1. Check for guaranteed losses
+                if (event.isGuaranteedLoss) {
+                    isSuccess = false;
+                    profit = -investmentAmount; // Lose the exact amount invested
+                    newPonziScore += 15; // Increase Ponzi score for falling for guaranteed loss
+                    outcomeType = 'negative';
+                }
+                // 2. Check for specific negative scenarios based on context
+                else if (event.title === 'Market Euphoria!') {
+                    isSuccess = false;
+                    profit = -investmentAmount * 0.6; // Lose 60% buying the top (slightly higher loss)
+                    newPonziScore += 5;
+                    outcomeType = 'negative';
+                }
+                else if (event.title === 'Market Jitters') {
+                    isSuccess = false;
+                    profit = -investmentAmount * 0.2; // Smaller loss for jitters (20%)
+                    outcomeType = 'negative';
+                }
+                 else if (event.type === 'nftOpportunity' && (gameState.marketSentiment === 'neutral' || gameState.marketSentiment === 'bearish' || gameState.marketSentiment === 'panic')) {
+                     isSuccess = false;
+                     profit = -investmentAmount * 0.8; // NFT fails harder in bad market (lose 80%)
+                     newPonziScore += 10;
+                     outcomeType = 'negative';
+                 }
+                  else if (event.title === 'Stablecoin Depegs Slightly') {
+                     isSuccess = false;
+                     profit = -investmentAmount * 0.1; // Small loss for investing during stablecoin depeg
+                     outcomeType = 'negative';
+                 }
+                 else if (event.title === 'New Regulation Proposed') {
+                    isSuccess = false;
+                    profit = -investmentAmount * 0.05; // Tiny loss for neutral event
+                    outcomeType = 'negative';
+                 }
+                // 3. Check for guaranteed profits (generally small)
+                else if (event.isGuaranteedProfit) {
+                    isSuccess = true;
+                    // Profit is investment * (multiplier - 1)
+                    profit = investmentAmount * ((event.profitMultiplier || 1.2) - 1); // Default to 20% profit if multiplier not set
+                    outcomeType = 'positive';
+                }
+                // 4. Default positive outcomes (non-guaranteed loss/profit, not NFT in bad market)
+                else {
+                     isSuccess = true;
+                     // Profit = investment * (multiplier - 1)
+                     // Use event multiplier or default to 2.0 (100% profit) if not set (Increased default)
+                     let baseMultiplier = event.profitMultiplier || 2.0;
 
-         // --- Specific logic for NFT Opportunities ---
-          if (event.type === 'nftOpportunity') {
-             // NFT success highly dependent on bullish/euphoric sentiment
-             if (gameState.marketSentiment === 'neutral' || gameState.marketSentiment === 'bearish' || gameState.marketSentiment === 'panic') {
-                 failureChance = 0.85; // High chance of failure in neutral/bear markets
-             } else { // Bullish or Euphoric
-                 failureChance = 0.30; // Lower chance, but still risky
-             }
-         }
+                     // Adjust multiplier based on sentiment (less impact than before, base multiplier is key)
+                     if (gameState.marketSentiment === 'euphoric') baseMultiplier *= 1.1; // Slightly less boost in euphoria
+                     if (gameState.marketSentiment === 'bullish') baseMultiplier *= 1.2; // More boost in bullish
+                     if (gameState.marketSentiment === 'bearish') baseMultiplier *= 0.8; // Slightly larger reduction
+                     if (gameState.marketSentiment === 'panic') baseMultiplier *= 0.7; // Larger reduction in panic
 
-        // Specific logic for Market Jitters
-        let marketJittersFailureOverride = false;
-        if (event.title === 'Market Jitters' && action === 'Invest') {
-             failureChance = 1.0; // Force failure
-             marketJittersFailureOverride = true; // Flag for specific message
-         }
-
-         const randomNumber = Math.random();
-         const eventFailed = randomNumber < failureChance;
-         const feedbackClue = event.subtleClue ? ` Hint: ${event.subtleClue}` : "";
-         // Use investmentAmount directly for loss calculation
-         const calculatedLossAmount = investmentAmount * ( (event.isHighRisk || event.type === 'scamOpportunity' || event.type === 'microcap') ? 1.0 : (0.3 + Math.random() * 0.4) );
-
-         // --- Logic for 'Invest' Action ---
-         if (action === 'Invest') {
-             if (investmentAmount <= 0) {
-                 statusUpdate += ' Selected 0% to invest.';
-                 outcome = { type: 'neutral', description: `You observed the event but chose not to invest any DAI.` };
-             } else if (newBalance < investmentAmount) {
-                 statusUpdate += ' Not enough balance!';
-                 outcome = { type: 'neutral', description: `Insufficient funds to invest $${investmentAmount.toFixed(2)} DAI.` };
-             } else {
-                 // Check for Failure First
-                 if (eventFailed) {
-                     potentialOutcomeType = 'negative';
-                     // Increased loss factor for high risk / scams / microcaps
-                     lossFactor = (event.isHighRisk || event.type === 'scamOpportunity' || event.type === 'microcap') ? 1.0 : (0.3 + Math.random() * 0.4);
-                     const lossAmount = investmentAmount * lossFactor; // Loss based on investment amount
-                     newBalance -= lossAmount;
-                     newPonziScore += event.isHighRisk ? 15 : 5;
-
-                     // Construct failure feedback
-                     if (marketJittersFailureOverride) {
-                         outcome = { type: 'negative', description: `Investing during 'Market Jitters' backfired due to uncertainty! Lost $${lossAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount };
-                     } else if (event.type === 'scamOpportunity') {
-                         outcome = { type: 'negative', description: `It was a trap! The '${event.title}' rugged. Lost your full investment of $${investmentAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount }; // Loss is investmentAmount
-                     } else if (event.type === 'nftOpportunity') {
-                         outcome = { type: 'negative', description: `The NFT hype died! Investment in '${event.title}' rugged or went to zero. Lost $${lossAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount };
-                     } else if (event.delayedEffect && event.title.includes('Elon')) { // Specific case for Elon tweet
-                         outcome = { type: 'negative', description: `Chased the pump too late! Elon's tweet was yesterday. Lost $${lossAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount };
-                     } else if (gameState.marketSentiment === 'euphoric' && event.type !== 'marketShift') {
-                         outcome = { type: 'negative', description: `Bought the top! Investment based on '${event.title}' failed during market euphoria. Lost $${lossAmount.toFixed(2)} DAI. Remember: Bear markets are born in Euphoria.${feedbackClue}`, profit: -lossAmount };
-                     } else if (event.type === 'microcap') {
-                        outcome = { type: 'negative', description: `The microcap '${event.title}' turned out to be worthless! Lost your full investment of $${investmentAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount };
-                     } else {
-                         outcome = { type: 'negative', description: `Investment based on '${event.title}' failed. Lost $${lossAmount.toFixed(2)} DAI.${feedbackClue}`, profit: -lossAmount };
+                     // Special case for buying during panic (contrarian) - boosted multiplier
+                     if (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) {
+                        baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 2.8); // Use event's boosted multiplier or 2.8 default
                      }
-                     statusUpdate += ` Investment failed. Lost $${lossAmount.toFixed(2)} DAI.`;
-                 } else {
-                     // --- Success Case ---
-                     potentialOutcomeType = 'positive';
-                     let baseProfitMultiplier = (event.isHighRisk || event.type === 'nftOpportunity' || event.type === 'microcap') ? (0.5 + Math.random() * 1.5) : (0.1 + Math.random() * 0.4);
-                     if (event.type === 'nftOpportunity') baseProfitMultiplier *= 1.2; // NFTs can have higher upside
-                     if (event.type === 'microcap') baseProfitMultiplier *= 2.0; // Microcaps can have massive upside if they hit
+                     // Ensure multiplier is at least 1 (break even)
+                     baseMultiplier = Math.max(1.0, baseMultiplier);
 
-                     // Adjust profit based on sentiment (synergy with success)
-                     if (gameState.marketSentiment === 'euphoric') baseProfitMultiplier *= 1.5;
-                     if (gameState.marketSentiment === 'bullish') baseProfitMultiplier *= 1.2;
-                     if (gameState.marketSentiment === 'bearish') baseProfitMultiplier *= 0.8; // Reduced gains in bear
-                     if (gameState.marketSentiment === 'panic') baseProfitMultiplier *= 0.5; // Even lower gains in panic
-                     profitMultiplier = Math.max(0, baseProfitMultiplier);
+                     profit = investmentAmount * (baseMultiplier - 1); // Calculate profit based on the final multiplier
+                     outcomeType = 'positive';
+                }
 
-                     const profit = investmentAmount * profitMultiplier; // Profit based on investment amount
-                     newBalance += profit;
-                     const panicSellMessage = (event.title === 'Massive Liquidation Cascade' && gameState.marketSentiment === 'panic') ? " Buying during extreme fear paid off!" : "";
-                     const extremeFearMessage = (event.title.includes('Extreme Fear') && gameState.marketSentiment === 'panic') ? " Contrarian investing during extreme fear worked this time!" : "";
+                // Apply profit/loss to balance
+                newBalance += profit;
 
-                      if (event.type === 'nftOpportunity') {
-                         outcome = { type: 'positive', description: `Mint successful / Floor pumped on '${event.title}'! Your investment of $${investmentAmount.toFixed(2)} DAI yielded a profit of $${profit.toFixed(2)} DAI!`, profit: profit };
-                      } else if (event.type === 'microcap') {
-                        outcome = { type: 'positive', description: `Moonshot! The microcap '${event.title}' exploded! Your investment of $${investmentAmount.toFixed(2)} DAI yielded a profit of $${profit.toFixed(2)} DAI!`, profit: profit };
-                      } else {
-                         outcome = { type: 'positive', description: `Good call on '${event.title}'! Your investment of $${investmentAmount.toFixed(2)} DAI yielded a profit of $${profit.toFixed(2)} DAI!${panicSellMessage}${extremeFearMessage}`, profit: profit };
-                      }
+                // --- Construct Outcome Description ---
+                if (outcomeType === 'negative') {
+                     let reason = "Investment failed.";
+                     if (event.isGuaranteedLoss && event.type === 'scamOpportunity') reason = `It was a trap! The '${event.title}' rugged.`;
+                     else if (event.isGuaranteedLoss && event.type === 'nftOpportunity') reason = `The NFT hype died or it rugged ('${event.title}').`;
+                     else if (event.isGuaranteedLoss && event.delayedEffect) reason = `Chasing the pump ('${event.title}') too late backfired.`;
+                     else if (event.isGuaranteedLoss) reason = `The setup for '${event.title}' was unfavorable.`;
+                     else if (event.title === 'Market Euphoria!') reason = `Bought the top during Market Euphoria! Remember: Bear markets are born in euphoria.`;
+                     else if (event.title === 'Market Jitters') reason = `Investing during Market Jitters proved too risky.`;
+                      else if (event.title === 'Stablecoin Depegs Slightly') reason = `Investing during the stablecoin depeg was risky.`;
+                      else if (event.title === 'New Regulation Proposed') reason = `The market reacted poorly to the proposed regulation.`;
+                     else if (event.type === 'nftOpportunity') reason = `The NFT market was too cold for '${event.title}' to succeed.`;
+
+                     outcome = { type: 'negative', description: `${reason} Lost ${Math.abs(profit).toFixed(2)} DAI.${feedbackClue}`, profit: profit };
+                     statusUpdate += ` Investment failed. Lost ${Math.abs(profit).toFixed(2)} DAI.`;
+                 } else { // Positive outcome
+                     const panicBuyMessage = (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) ? " Buying during extreme fear paid off! Remember: Bull markets are often born in depression." : "";
+                     const profitPercentage = profit > 0 ? (profit / investmentAmount) * 100 : 0;
+                     outcome = { type: 'positive', description: `Good call on '${event.title}'! Your investment of $${investmentAmount.toFixed(2)} DAI yielded a profit of $${profit.toFixed(2)} DAI (+${profitPercentage.toFixed(1)}%)!${panicBuyMessage}${feedbackClue}`, profit: profit };
                      statusUpdate += ` Gained $${profit.toFixed(2)} DAI!`;
                  }
-             }
-         }
-         // --- Logic for 'Ignore' Action ---
-         else if (action === 'Ignore') {
-             statusUpdate += ` Market sentiment: ${gameState.marketSentiment}.`;
 
-             // --- Simulate and Show Potential Outcome When Ignoring ---
-             // Reuse the same failure chance calculation as 'Invest'
-             let ignoreFailureChance = baseFailureChance;
-             if (event.delayedEffect) ignoreFailureChance += 0.20;
-             if (gameState.marketSentiment === 'panic') ignoreFailureChance += 0.25;
-             if (gameState.marketSentiment === 'bearish') ignoreFailureChance += 0.10;
-             if (gameState.marketSentiment === 'euphoric') ignoreFailureChance += 0.30;
-             if (gameState.marketSentiment === 'bullish') ignoreFailureChance -= 0.05;
-             ignoreFailureChance = Math.max(0.05, Math.min(0.95, ignoreFailureChance));
-             if (event.title === 'Market Jitters') ignoreFailureChance = 1.0; // Jitters always fails if invested
+            }
+        } else if (action === 'Ignore') {
+            // --- Ignore Logic ---
+            statusUpdate += ` Market sentiment: ${gameState.marketSentiment}.`;
+            let ignoreOutcomeType: GameOutcomeEvent['type'] = 'neutral';
+            let ignoreDescription = `You ignored '${event.title}'.`;
 
-             const ignoredEventFailed = randomNumber < ignoreFailureChance; // Use the same random number
+            // Determine what *would* have happened if invested (using same deterministic logic)
+            let potentialProfit = 0;
+            let wouldHaveBeenSuccess = false;
+            const simulatedInvestment = gameState.balance * 0.25; // Simulate potential outcome based on 25% investment
 
-             if (ignoredEventFailed) {
-                 // Ignored a failing event (dodged a bullet)
-                 outcome = {
-                    type: 'neutral',
-                    description: `You ignored '${event.title}'. Good call! It turned out to be ${event.isHighRisk ? 'a rug/scam' : 'a losing trade'}.${feedbackClue}`
-                 };
-             } else {
-                 // Ignored a successful event (missed opportunity)
-                 let baseProfitMultiplier = (event.isHighRisk || event.type === 'nftOpportunity' || event.type === 'microcap') ? (0.5 + Math.random() * 1.5) : (0.1 + Math.random() * 0.4);
-                 if (event.type === 'nftOpportunity') baseProfitMultiplier *= 1.2;
-                 if (event.type === 'microcap') baseProfitMultiplier *= 2.0;
+             if (event.isGuaranteedLoss || event.title === 'Market Euphoria!' || event.title === 'Market Jitters' || event.title === 'Stablecoin Depegs Slightly' || event.title === 'New Regulation Proposed' || (event.type === 'nftOpportunity' && ['neutral', 'bearish', 'panic'].includes(gameState.marketSentiment))) {
+                 wouldHaveBeenSuccess = false;
+                 // Calculate potential loss based on the specific negative scenario
+                 if (event.title === 'Market Euphoria!') potentialProfit = -(simulatedInvestment * 0.6);
+                 else if (event.title === 'Market Jitters') potentialProfit = -(simulatedInvestment * 0.2);
+                 else if (event.title === 'Stablecoin Depegs Slightly') potentialProfit = -(simulatedInvestment * 0.1);
+                 else if (event.title === 'New Regulation Proposed') potentialProfit = -(simulatedInvestment * 0.05);
+                 else if (event.type === 'nftOpportunity') potentialProfit = -(simulatedInvestment * 0.8);
+                 else potentialProfit = -simulatedInvestment; // Default guaranteed loss
 
-                 if (gameState.marketSentiment === 'euphoric') baseProfitMultiplier *= 1.5;
-                 if (gameState.marketSentiment === 'bullish') baseProfitMultiplier *= 1.2;
-                 if (gameState.marketSentiment === 'bearish') baseProfitMultiplier *= 0.8;
-                 if (gameState.marketSentiment === 'panic') baseProfitMultiplier *= 0.5;
-                 profitMultiplier = Math.max(0, baseProfitMultiplier);
-                 // Simulate profit based on a default 25% investment when ignoring
-                 const potentialProfit = (gameState.balance * 0.25 * profitMultiplier);
-
-                 outcome = {
-                     type: 'neutral',
-                     description: `You ignored '${event.title}'. Turns out it pumped! You missed out on a potential profit of ~$${potentialProfit.toFixed(2)} DAI.`
-                 };
+             } else { // Calculate potential profit
+                 wouldHaveBeenSuccess = true;
+                  // Use event multiplier or default to 2.0 if not set
+                 let baseMultiplier = event.profitMultiplier || 2.0;
+                 if (gameState.marketSentiment === 'euphoric') baseMultiplier *= 1.1;
+                 if (gameState.marketSentiment === 'bullish') baseMultiplier *= 1.2;
+                 if (gameState.marketSentiment === 'bearish') baseMultiplier *= 0.8;
+                 if (gameState.marketSentiment === 'panic') baseMultiplier *= 0.7;
+                  if (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) {
+                     baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 2.8); // Use boosted multiplier
+                  }
+                  baseMultiplier = Math.max(1.0, baseMultiplier); // Ensure >= 1
+                 potentialProfit = simulatedInvestment * (baseMultiplier - 1); // Calculate potential profit
              }
 
-         }
+            if (wouldHaveBeenSuccess) {
+                ignoreDescription += ` Turns out it pumped! You missed out on a potential profit of ~$${potentialProfit.toFixed(2)} DAI.`;
+            } else {
+                 ignoreDescription += ` Good call! It turned out to be ${event.type === 'scamOpportunity' || event.isGuaranteedLoss ? 'a rug/scam or bad setup' : 'a losing trade'}. You avoided a potential loss of ~$${Math.abs(potentialProfit).toFixed(2)} DAI.${feedbackClue}`;
+            }
+
+            outcome = { type: ignoreOutcomeType, description: ignoreDescription };
+        }
 
          // Calculate portfolio value AFTER action and update history for the current day again
          const valueAfterAction = Math.max(0, newBalance); // Ensure balance doesn't go negative
@@ -418,9 +432,6 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
          const updatedHistory = gameState.history.map(h =>
              h.day === gameState.day ? { ...h, value: valueAfterAction } : h
          );
-         // If the action was taken on day N, the history array should reflect the balance *at the end* of day N.
-         // handleNextDay then adds day N+1 with this balance.
-
 
          setGameState(prev => ({
              ...prev,
@@ -431,7 +442,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
              outcomeEvent: outcome, // Show the outcome
              history: updatedHistory, // Update history with value after action for the current day
          }));
-     };
+    };
 
 
     const handleEndGame = (finalState: GameState) => {
@@ -514,7 +525,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
              className
          )}>
             <div className="relative z-10 flex flex-col flex-1">
-                <CardHeader> {/* Removed bg-primary to inherit gradient */}
+                 <CardHeader className="bg-transparent"> {/* Removed bg-primary to inherit gradient */}
                     <div className="flex justify-between items-start">
                         <div className="flex-1 text-center">
                             <CardTitle className="flex items-center justify-center gap-2 text-lg md:text-xl text-primary-foreground">
@@ -625,7 +636,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                 )}>{gameState.marketSentiment}</span></span>
                             </div>
 
-                            {gameState.currentEvent?.actionOptions?.includes('Invest') && (
+                            {gameState.currentEvent?.actionOptions?.includes('Invest') && !gameState.outcomeEvent && ( // Only show slider when invest is an option and outcome not shown
                                 <div className="space-y-2 bg-primary/50 p-3 rounded-md"> {/* Changed background */}
                                     <Label htmlFor="investment-slider" className="text-base text-primary-foreground/90">Investment % (of Balance): {investmentPercentage}%</Label>
                                     <Slider
@@ -718,6 +729,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                             <p className="text-base text-primary-foreground/80 text-center">{gameState.lastActionStatus || "Game Over"}</p>
                             {earnedXp > 0 && <p className="text-primary font-medium text-lg">Earned {earnedXp} XP!</p>}
                             <div className="flex gap-4">
+                                {/* Flex Button is disabled/non-functional */}
                                 <Button variant="outline" className="gap-2 text-base border-primary-foreground/30 text-primary-foreground/90 hover:bg-primary-foreground/10" disabled>
                                 <Send size={16}/> Flex Result
                                 </Button>
@@ -729,4 +741,3 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
         </Card>
     );
 }
-
