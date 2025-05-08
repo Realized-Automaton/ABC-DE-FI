@@ -12,6 +12,13 @@ export const metadata: Metadata = {
   title: 'ABC De-fi', // Updated title
   description:
     'Learn crypto actions safely with interactive tutorials and gamification.',
+  // Add icon metadata for favicon
+  icons: {
+    icon: 'https://i.ibb.co/bMgZz4h4/a-logo-for-a-crypto-learning-and-gaming-applicatio.png', // Use the logo URL
+    // You can also specify different sizes or types if needed:
+    // apple: '/apple-icon.png',
+    // shortcut: '/favicon-16x16.png',
+  },
 };
 
 // Configure Inter font with regular (400) and bold (700) weights

@@ -2,7 +2,8 @@
 import Image from 'next/image';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Check, Layers, ShieldCheck, Settings, BarChart3, Target, ScrollText, AlertTriangle, Gamepad2, BookOpen, TrendingUp, GraduationCap } from 'lucide-react'; // Added GraduationCap
+// Updated icons: Removed Layers, added Token (using Coins as proxy), updated others
+import { Check, Coins, ShieldCheck, Settings, BarChart3, Target, ScrollText, AlertTriangle, Gamepad2, BookOpen, TrendingUp, GraduationCap } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -13,16 +14,18 @@ import { ThemeToggleButton } from '@/components/theme-toggle-button';
 import { SidebarNavigation } from '@/components/sidebar-navigation';
 import { UserProfileCard } from '@/components/user-profile-card';
 import { CryptoInfographicCard } from '@/components/crypto-infographic-card';
-import { LpCard } from '@/components/lp-card';
+// Removed LpCard import
+import { AddCustomTokenCard } from '@/components/add-custom-token-card'; // Import the new card
 import { ConnectWalletButton } from '@/components/connect-wallet-button';
 import { DeFiDegenGame } from '@/components/defi-degen-game'; // Import DeFiDegenGame
 
 
 // Mock data - replace with actual data fetching
+// Updated quest 3 details
 const quests = [
-    { id: 1, title: "Mint Your First $CLASS Token", description: "Learn the basics of minting.", icon: <Gamepad2 />, completed: true, xp: 50 },
+    { id: 1, title: "Mint Your First $CLASS Token", description: "Learn the basics of minting.", icon: <Gamepad2 />, completed: true, xp: 50 }, // Placeholder icon
     { id: 2, title: "Swap $CLASS for $XP", description: "Understand token swapping.", icon: <BookOpen />, completed: false, xp: 75 },
-    { id: 3, title: "Provide Liquidity", description: "Create your first LP.", icon: <Layers />, completed: false, xp: 100 },
+    { id: 3, title: "Add a Custom Token", description: "Import any ERC-20 to your wallet.", icon: <Coins />, completed: false, xp: 50 }, // Updated quest 3
     { id: 4, title: "Use the Faucet", description: "Get some free tokens.", icon: <ShieldCheck />, completed: false, xp: 50 },
     { id: 6, title: "Spot the Rug Pull", description: "Learn to identify risky projects.", icon: <Target />, completed: false, xp: 150 },
     { id: 7, title: "Survive Telegram Support", description: "Identify a common support scam.", icon: <AlertTriangle />, completed: false, xp: 100 },
@@ -65,7 +68,7 @@ export default function Home() {
                    alt="ABC De-fi Logo"
                    width={80} // Smaller width for mobile header
                    height={20} // Adjust height proportionally
-                   className="h-auto"
+                   className="h-auto mx-auto" // Center mobile logo
                    unoptimized
                  />
                </div>
@@ -97,7 +100,8 @@ export default function Home() {
 
             <FaucetCard className="col-span-1 h-full" questId={4} xpReward={50} />
             <SwapCard className="col-span-1 h-full" questId={2} xpReward={75} />
-            <LpCard className="col-span-1 h-full" questId={3} xpReward={100} />
+            {/* Replace LpCard with AddCustomTokenCard */}
+            <AddCustomTokenCard className="col-span-1 h-full" questId={3} xpReward={50} />
 
              {/* DeFiDegenGame added here */}
             <DeFiDegenGame className="md:col-span-2 lg:col-span-3 h-full" questId={8} xpReward={250} />
