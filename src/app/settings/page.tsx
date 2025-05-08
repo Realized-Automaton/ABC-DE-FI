@@ -178,7 +178,7 @@ export default function SettingsPage() {
                    alt="ABC De-fi Logo"
                    width={80} // Smaller width for mobile header
                    height={20} // Adjust height proportionally
-                   className="h-auto"
+                   className="h-auto mx-auto" // Center mobile logo
                    unoptimized
                  />
                </div>
