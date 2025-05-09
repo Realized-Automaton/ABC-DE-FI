@@ -87,10 +87,20 @@ export default function ChallengesPage() {
         </SidebarHeader>
         <SidebarContent className="p-4 flex-1">
            <SidebarNavigation /> {/* Use the navigation component */}
+           <div className="flex flex-col items-center py-4"> {/* Removed mt-auto */}
+            <Image
+              src="https://i.ibb.co/CKy4DsqZ/defi-made-simple.png"
+              alt="DeFi Made Simple Banner"
+              width={200}
+              height={75}
+              className="rounded-md"
+              data-ai-hint="DeFi education"
+              unoptimized
+            />
+          </div>
         </SidebarContent>
-         <SidebarFooter className="p-4 flex items-center justify-between"> {/* Changed back to flex-row and justify-between */}
+         <SidebarFooter className="p-4 flex items-center justify-between">
              <ThemeToggleButton />
-             {/* Removed DownloadSourceCodeButton */}
          </SidebarFooter>
       </Sidebar>
 
