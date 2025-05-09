@@ -8,6 +8,7 @@ import { useUser } from '@/context/user-context'; // Import useUser hook
 import { cn } from '@/lib/utils';
 import { Trophy, UserCircle } from 'lucide-react'; // Import Trophy for badges section and UserCircle for fallback
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Import Avatar components
+import Image from 'next/image'; // Import next/image
 
 
 // Mock Data for badges - this should eventually come from user state/backend
@@ -52,7 +53,7 @@ export function UserProfileCard({ className }: { className?: string }) {
               </AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <CardTitle>{renderUsername(username)}&apos;s Progress</CardTitle>
+            <CardTitle>{renderUsername(username)}'s Progress</CardTitle>
             <CardDescription>Level {level}</CardDescription>
           </div>
       </CardHeader>
@@ -63,6 +64,19 @@ export function UserProfileCard({ className }: { className?: string }) {
               <span className="text-xs text-muted-foreground">To Next Level</span>
             </div>
             <Progress value={progressPercentage} className="h-2" />
+        </div>
+
+        {/* Added Image Below XP Progress */}
+        <div className="my-3">
+          <Image
+            src="https://i.ibb.co/XZWKgrrh/chalkboard-1.png" // Updated placeholder image URL
+            alt="Let's Get Started"
+            width={300}
+            height={150}
+            className="rounded-md object-cover w-full h-auto"
+            data-ai-hint="chalkboard start" // AI Hint for image search
+            unoptimized // If using external hosting like ibb without pro plan
+          />
         </div>
 
         <div>
@@ -80,3 +94,4 @@ export function UserProfileCard({ className }: { className?: string }) {
     </Card>
   );
 }
+
