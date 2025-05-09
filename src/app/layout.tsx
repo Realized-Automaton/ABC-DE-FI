@@ -42,8 +42,8 @@ export default function RootLayout({
       <body className={`antialiased`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="dark" // Changed default theme to dark
+          enableSystem={false} // Disable system theme preference if we want to force dark/light
           disableTransitionOnChange
         >
           <Providers> {/* Wrap with the combined Providers component */}
