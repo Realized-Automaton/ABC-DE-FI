@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Wallet, RefreshCw, Coins, ShieldCheck, Lightbulb } from 'lucide-react';
+import { Wallet, RefreshCw, Coins, ShieldCheck, Lightbulb, PlusSquare } from 'lucide-react'; // Added PlusSquare
 
 interface CryptoInfographicCardProps {
   className?: string;
@@ -11,7 +11,7 @@ export function CryptoInfographicCard({ className }: CryptoInfographicCardProps)
   return (
     // Ensure the card itself is a flex column container
     <Card className={cn(
-        "flex flex-col", // Keep flex-col
+        "flex flex-col h-full", // Added h-full
         "bg-gradient-to-br from-primary/10 to-accent/10",
         className
     )}>
@@ -44,11 +44,11 @@ export function CryptoInfographicCard({ className }: CryptoInfographicCardProps)
 
          <div className="flex items-center gap-3">
             <div className="p-2 bg-secondary/20 rounded-full text-secondary-foreground flex-shrink-0">
-                 <Coins size={18} /> {/* Slightly smaller icon */}
+                 <PlusSquare size={18} /> {/* Changed icon from Coins to PlusSquare */}
             </div>
            <div>
-             <h4 className="font-semibold">Liquidity Pools (LPs)</h4>
-             <p className="text-muted-foreground text-xs">Pairs of tokens locked in a smart contract to facilitate swaps.</p>
+             <h4 className="font-semibold">Custom Tokens</h4>
+             <p className="text-muted-foreground text-xs">Add any ERC-20 token to your wallet using its contract address.</p>
            </div>
          </div>
 

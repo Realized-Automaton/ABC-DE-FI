@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -142,7 +143,7 @@ export function RugPullCard({ className, questId, xpReward }: RugPullCardProps) 
           </div>
            <Popover>
              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <Button className={cn("h-8 w-8 p-1.5 bg-accent text-accent-foreground hover:bg-accent/90")}>
                   <Info size={16} />
                    <span className="sr-only">Rug Pull Info</span>
                 </Button>

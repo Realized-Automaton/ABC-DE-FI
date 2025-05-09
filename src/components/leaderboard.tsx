@@ -41,7 +41,7 @@ export function Leaderboard({ className }: { className?: string }) {
                 </div>
                  <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" className={cn("h-8 w-8 text-muted-foreground hover:text-foreground aspect-square")}> {/* Added aspect-square */}
+                    <Button className={cn("h-8 w-8 p-1.5 bg-accent text-accent-foreground hover:bg-accent/90")}>
                       <Info size={16} />
                        <span className="sr-only">Leaderboard Info</span>
                     </Button>
