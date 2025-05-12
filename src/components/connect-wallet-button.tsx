@@ -15,8 +15,8 @@ export function ConnectWalletButton() {
         setTimeout(() => {
             setIsLoading(false);
             toast({
-                title: "Coming Soon!",
-                description: "Wallet connect functionality is under development.",
+                title: "Sandbox Environment",
+                description: "This is a safe learning space. No real funds are at risk!",
             });
         }, 500);
     };
