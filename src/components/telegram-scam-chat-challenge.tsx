@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -54,10 +55,11 @@ const HELP_OPTIONS = [
     "Is admin available?",
 ];
 
+// Shortened problem options
 const PROBLEM_OPTIONS = [
-    "My balance isn't updating after a swap.",
-    "I keep getting 'Insufficient Funds' error.",
-    "The wallet app keeps crashing.",
+    "Balance not updating.",
+    "Insufficient Funds error.",
+    "Wallet app crashing.",
 ];
 
 // More realistic crypto usernames
@@ -97,6 +99,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
     const [view, setView] = React.useState<'group' | 'dm'>('group');
     const [showDmNotification, setShowDmNotification] = React.useState(false);
     const [challengeStarted, setChallengeStarted] = React.useState(false); // New state for start/reset
+    const [showDecisionPoint, setShowDecisionPoint] = React.useState(false); // State for delaying decision point UI
     const scrollAreaRef = React.useRef<HTMLDivElement>(null);
     const otherUserMessageIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const timeoutRefs = React.useRef<NodeJS.Timeout[]>([]); // Store all timeout IDs
@@ -104,11 +107,11 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
     const formatTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     // Helper to safely add timeouts
-    const addTimeout = (callback: () => void, delay: number) => {
+    const addTimeout = React.useCallback((callback: () => void, delay: number) => {
         const id = setTimeout(callback, delay);
         timeoutRefs.current.push(id);
         return id;
-    };
+    }, []);
 
 
     // --- Cleanup Timers ---
@@ -141,7 +144,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
      const initializeChat = React.useCallback(() => {
         cleanupTimers(); // Clear any existing timers first
         setMessages([]); // Clear previous messages
-        addMessage('system', <>You joined <span className='font-semibold'>{GROUP_NAME}</span>. Choose an option below if you need help.</>);
+        addMessage('system', <>You joined <span className='font-semibold'>{GROUP_NAME}</span>. <span className="font-bold text-destructive dark:text-red-400">Admins will NEVER DM YOU!</span> Choose an option below if you need help.</>);
 
         // Start adding other user messages only if in group view and challenge is active
         if (view === 'group' && challengeStarted && !isCompleted && !isScammed) {
@@ -155,7 +158,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
              }
          }
         setChatStage(1); // Ready for user help request
-    }, [cleanupTimers, view, addOtherUserMessage, challengeStarted, isCompleted, isScammed]); // Added dependencies
+    }, [cleanupTimers, view, addOtherUserMessage, challengeStarted, isCompleted, isScammed, addTimeout]); // Added dependencies
 
 
     // --- Handles starting the challenge ---
@@ -164,6 +167,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         setIsCompleted(false);
         setIsScammed(false);
         setShowDmNotification(false);
+        setShowDecisionPoint(false);
         setView('group'); // Start in group view
         initializeChat(); // Initialize chat, which now includes starting the interval
     };
@@ -177,6 +181,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         setIsCompleted(false);
         setIsScammed(false);
         setShowDmNotification(false);
+        setShowDecisionPoint(false);
         setView('group');
         setIsLoading(false);
         setShowSignPrompt(false);
@@ -192,30 +197,25 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
                  }
              }, 50);
         }
-        // Cleanup timeouts added by this effect if messages change rapidly
-        return () => {
-            // This might be too aggressive depending on usage, but ensures cleanup
-            // Consider if timeouts added here specifically need cleanup on message change
-        };
-    }, [messages]);
+    }, [messages, addTimeout]);
 
     // --- Game Logic Effects ---
     React.useEffect(() => {
         // This effect handles game progression based on stage and view
         if (!challengeStarted) return; // Don't run logic if challenge hasn't started
 
-        let stageTimer: NodeJS.Timeout | undefined;
+        let stageTimerId: NodeJS.Timeout | undefined;
 
         // --- Bot Sees Help Request (Stage 2) ---
         if (chatStage === 2 && view === 'group') {
-            stageTimer = addTimeout(() => {
+            stageTimerId = addTimeout(() => {
                 setShowDmNotification(true); // Make DM entry appear with notification
             }, 2000);
         }
         // --- Bot Sends First DM (Stage 4) ---
          else if (chatStage === 4 && view === 'dm') {
             setIsLoading(true);
-            stageTimer = addTimeout(() => {
+            stageTimerId = addTimeout(() => {
                  addMessage('bot', `Hello! I'm from ${BOT_NAME}. I saw your message in the group. How can I help you with your wallet issue today? Please select an option below.`);
                 setIsLoading(false);
                 setChatStage(5); // Ready for user to select problem option
@@ -224,22 +224,35 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         // --- Bot Sends Scam Link (Stage 6) ---
         else if (chatStage === 6 && view === 'dm') {
             setIsLoading(true);
-            stageTimer = addTimeout(() => {
+            setShowDecisionPoint(false); // Ensure decision point is hidden before bot message
+            stageTimerId = addTimeout(() => {
                 addMessage('bot', <>Okay, I see. Please visit our secure wallet synchronization portal to resolve this: <a href="#" onClick={(e) => { e.preventDefault(); handleLinkClick(); }} className="text-blue-500 dark:text-blue-400 underline break-all font-semibold hover:text-blue-600 dark:hover:text-blue-300">{FAKE_WEBSITE} <ExternalLink size={12} className="inline-block ml-1"/></a> <br/><br/> <span className='text-xs text-muted-foreground'>Make sure to connect your wallet and sign the transaction to re-sync.</span></>); // Changed link color
                 setIsLoading(false);
                 setChatStage(7); // Decision point
             }, 2500);
         }
 
-        // General cleanup for timers set in this effect
         return () => {
-            if (stageTimer) {
-                clearTimeout(stageTimer);
-                // Remove from ref array if needed, though cleanupTimers handles it globally
-            }
+            if (stageTimerId) clearTimeout(stageTimerId);
         };
 
-    }, [chatStage, view, challengeStarted]); // Dependencies remain the same
+    }, [chatStage, view, challengeStarted, addTimeout]); // Dependencies remain the same
+
+
+    // Effect to handle delayed appearance of decision point UI
+    React.useEffect(() => {
+        if (chatStage === 7 && view === 'dm' && challengeStarted && !isCompleted && !isScammed) {
+            setShowDecisionPoint(false); // Ensure it's initially hidden when stage becomes 7
+            const decisionTimerId = addTimeout(() => {
+                setShowDecisionPoint(true);
+            }, 2000); // 2 second delay (changed from 1000)
+
+            return () => clearTimeout(decisionTimerId);
+        } else {
+            // If conditions are not met (e.g., stage changes from 7), hide the decision point
+            setShowDecisionPoint(false);
+        }
+    }, [chatStage, view, challengeStarted, isCompleted, isScammed, addTimeout]);
 
 
     // --- Handles clicking predefined help options in group view ---
@@ -267,6 +280,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         setView(newView);
         setMessages([]); // Clear messages when switching contexts
         setIsLoading(false);
+        setShowDecisionPoint(false); // Hide decision point when switching views
 
         if (newView === 'group') {
             cleanupTimers(); // Stop potential DM timers/loading
@@ -284,13 +298,15 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
             if (chatStage === 2 || chatStage === 3) {
                 setChatStage(4); // Trigger bot's first message
             } else if (chatStage > 3) {
-                // If already in later stages of DM, replay relevant bot messages?
-                // Or just show current state? For simplicity, just show current state.
-                // If stage 5, show problem options again? Maybe not needed.
                  if (chatStage === 6 || chatStage === 7) {
                      // Re-add the scam link message if returning to DM at that stage
                      addTimeout(() => {
                           addMessage('bot', <>Okay, I see. Please visit our secure wallet synchronization portal to resolve this: <a href="#" onClick={(e) => { e.preventDefault(); handleLinkClick(); }} className="text-blue-500 dark:text-blue-400 underline break-all font-semibold hover:text-blue-600 dark:hover:text-blue-300">{FAKE_WEBSITE} <ExternalLink size={12} className="inline-block ml-1"/></a> <br/><br/> <span className='text-xs text-muted-foreground'>Make sure to connect your wallet and sign the transaction to re-sync.</span></>); // Changed link color
+                         // If returning to stage 7, trigger the decision point delay again
+                         if (chatStage === 7) {
+                            setShowDecisionPoint(false); // Hide first
+                            addTimeout(() => setShowDecisionPoint(true), 2000); // Then show after 2s delay
+                         }
                      }, 500); // Small delay
                  }
             }
@@ -307,6 +323,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         if (chatStage < 8 && view === 'dm' && challengeStarted) {
             setChatStage(8);
             setIsCompleted(true);
+            setShowDecisionPoint(false);
             cleanupTimers(); // Stop any remaining timers
             addXp(xpReward);
             addMessage('system', <span className="text-green-600 dark:text-green-400 font-medium">Good job! You correctly identified this as a scam. Support will NEVER DM you first or ask you to connect your wallet to a random site.</span>);
@@ -325,6 +342,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         if (chatStage < 8 && view === 'dm' && challengeStarted) {
             setChatStage(9);
             setIsScammed(true);
+            setShowDecisionPoint(false);
             cleanupTimers(); // Stop any remaining timers
             addMessage('system', <span className='text-destructive font-medium'>You signed the transaction! The scammer drained 10,000 XYZ tokens from your wallet. Always verify URLs and transaction details carefully.</span>);
             addTimeout(() => {
@@ -353,7 +371,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
             // Clear interval if conditions are not met
             cleanupTimers();
         }
-     }, [challengeStarted, view, isCompleted, isScammed, addOtherUserMessage, cleanupTimers]);
+     }, [challengeStarted, view, isCompleted, isScammed, addOtherUserMessage, cleanupTimers, addTimeout]);
 
 
     return (
@@ -484,18 +502,18 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
                                              {/* Message Bubble */}
                                             {msg.sender !== 'system' && (
                                                 <div className={cn(
-                                                     "rounded-lg px-3 py-1.5 text-sm shadow-sm break-words relative", // Added relative for timestamp
-                                                     msg.sender === 'user' ? "bg-blue-500 dark:bg-blue-700 text-white" : "bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100", // Mimic Telegram bubble colors
-                                                     ['bot', 'otherUser'].includes(msg.sender) ? "" : "" // Remove border
+                                                     "rounded-lg px-3 py-1.5 text-sm shadow-sm", 
+                                                     msg.sender === 'user' ? "bg-blue-500 dark:bg-blue-700 text-white" : "bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100"
                                                  )}>
                                                      {/* Username for Bot/Other Users */}
                                                       {msg.sender === 'bot' && <p className="text-xs font-semibold text-red-500 dark:text-red-400 mb-0.5">{BOT_NAME}</p>}
                                                       {msg.sender === 'otherUser' && <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 mb-0.5">{msg.username}</p>}
 
-                                                    {/* Message Text */}
-                                                    <p className="pr-10">{msg.text}</p> {/* Add padding for timestamp */}
-                                                    {/* Timestamp inside bubble */}
-                                                    <span className="absolute bottom-1 right-2 text-xs opacity-60">{msg.timestamp}</span>
+                                                    {/* Flex container for text and timestamp */}
+                                                    <div className="flex items-end justify-between gap-x-2">
+                                                        <p className="break-words flex-grow">{msg.text}</p>
+                                                        <span className="text-xs opacity-60 whitespace-nowrap self-end">{msg.timestamp}</span>
+                                                    </div>
                                                 </div>
                                             )}
                                              {/* System Message Text */}
@@ -514,14 +532,17 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
                                              <Avatar className="h-6 w-6 border flex-shrink-0 self-start mt-1">
                                                  <AvatarFallback className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300"><Bot size={12} /></AvatarFallback>
                                              </Avatar>
-                                            <div className="rounded-lg px-3 py-1.5 text-sm shadow-sm bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 relative">
+                                            <div className="rounded-lg px-3 py-1.5 text-sm shadow-sm bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100">
                                                  <p className="text-xs font-semibold text-red-500 dark:text-red-400 mb-0.5">{BOT_NAME}</p>
-                                                <div className="flex items-center space-x-1 pr-10">
+                                                <div className="flex items-center space-x-1">
                                                     <span className="h-1.5 w-1.5 bg-muted-foreground dark:bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                                                     <span className="h-1.5 w-1.5 bg-muted-foreground dark:bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                                                     <span className="h-1.5 w-1.5 bg-muted-foreground dark:bg-gray-400 rounded-full animate-bounce"></span>
                                                 </div>
-                                                 <span className="absolute bottom-1 right-2 text-xs opacity-60">{formatTime()}</span>
+                                                 {/* Timestamp for loading bubble - consistent styling */}
+                                                <div className="flex justify-end mt-1">
+                                                    <span className="text-xs opacity-60 whitespace-nowrap">{formatTime()}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -554,7 +575,7 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
                                       </div>
                                   )}
                                  {/* DM View - Decision Buttons */}
-                                 {view === 'dm' && chatStage === 7 && !isCompleted && !isScammed && (
+                                 {view === 'dm' && chatStage === 7 && showDecisionPoint && !isCompleted && !isScammed && (
                                      <div className="bg-yellow-100 dark:bg-yellow-900/30 text-center p-3 rounded-md border border-yellow-300 dark:border-yellow-700">
                                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-2 flex items-center justify-center gap-1"><AlertTriangle size={16}/>Decision Point</p>
                                          <p className="text-xs text-yellow-700 dark:text-yellow-400 mb-3">What do you do with the link provided?</p>
@@ -580,6 +601,9 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
                                  )}
                                   {view === 'dm' && ![5, 7].includes(chatStage) && !isCompleted && !isScammed && !isLoading && (
                                      <p className="text-xs text-muted-foreground dark:text-gray-500 text-center italic">Waiting for bot response or decision...</p>
+                                 )}
+                                 {view === 'dm' && chatStage === 7 && !showDecisionPoint && !isCompleted && !isScammed && !isLoading && (
+                                      <p className="text-xs text-muted-foreground dark:text-gray-500 text-center italic">Bot has sent a message. Reviewing...</p>
                                  )}
                              </div>
                          </div>
@@ -624,3 +648,4 @@ export function TelegramScamChatChallenge({ className, questId, xpReward }: Tele
         </Card>
     );
 }
+
