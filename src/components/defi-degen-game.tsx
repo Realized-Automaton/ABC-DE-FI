@@ -1,9 +1,11 @@
+
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image'; // Import next/image
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, DollarSign, TrendingUp, TrendingDown, Play, RefreshCw, Send, LineChart as LineChartIcon, Info, HelpCircle, Image as ImageIcon } from 'lucide-react';
+import { Brain, DollarSign, TrendingUp, TrendingDown, Play, RefreshCw, Send, LineChart as LineChartIcon, Info, HelpCircle, Image as ImageIconLucide } from 'lucide-react'; // Renamed Image to ImageIconLucide
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/context/user-context';
@@ -28,19 +30,19 @@ type TokenSymbol = 'GARBAGE' | 'CLOWN' | 'SAFE' | 'XYZ';
 // Add flags for deterministic outcomes
 interface GameEvent {
     id: number; // Unique identifier for the event
-    type: 'rumor' | 'tweet' | 'marketShift' | 'scamOpportunity' | 'news' | 'nftOpportunity' | 'daoDrama' | 'exploit' | 'utilityLaunch' | 'microcap';
+    type: 'rumor' | 'tweet' | 'marketShift' | 'scamOpportunity' | 'news' | 'nftOpportunity' | 'daoDrama' | 'exploit' | 'utilityLaunch' | 'microcap' | 'positiveDevelopment';
     title: string;
     description: string;
     token?: TokenSymbol;
     potentialGain?: string;
     actionOptions?: string[];
     sentimentEffect?: GameState['marketSentiment'];
-    isHighRisk?: boolean; // Still useful for context/XP? Or remove if purely deterministic
-    isGuaranteedLoss?: boolean; // Flag for events that *always* result in loss if invested
-    isGuaranteedProfit?: boolean; // Flag for events that *always* result in profit if invested (less common)
-    profitMultiplier?: number; // Represents the total return factor (e.g., 2.5 means 2.5x return, or 1.5x profit)
+    isHighRisk?: boolean;
+    isGuaranteedLoss?: boolean;
+    isGuaranteedProfit?: boolean;
+    profitMultiplier?: number;
     subtleClue?: string;
-    delayedEffect?: boolean; // Still useful for context/narrative
+    delayedEffect?: boolean;
 }
 
 interface GameOutcomeEvent {
@@ -60,7 +62,8 @@ interface GameState {
     ponziScore: number;
     lastActionStatus: string | null;
     history: PortfolioHistoryPoint[];
-    usedEventIds: number[]; // Track IDs of events shown in this cycle
+    usedEventIds: number[];
+    consecutiveNegativeEvents: number; // Added to track streaks of highly negative events
 }
 
 // --- Initial State ---
@@ -76,14 +79,14 @@ const INITIAL_STATE: GameState = {
     ponziScore: 0,
     lastActionStatus: null,
     history: [{ day: 0, value: INITIAL_BALANCE }],
-    usedEventIds: [], // Initialize used event IDs
+    usedEventIds: [],
+    consecutiveNegativeEvents: 0, // Initialize counter
 };
 
 // --- Mock Data & Helpers ---
-// Adjusted profitMultiplier values for higher potential gains and more favorable balance
 const MOCK_EVENTS: Omit<GameEvent, 'actionOptions'>[] = [
-    // Negative / Loss Events (Keep scams punishing)
-    { id: 2, type: 'tweet', title: 'Influencer Tweet: Promising Project Alert!', description: 'A popular crypto influencer is hyping a new project with ambitious goals. DYOR!', potentialGain: '100x (maybe)', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Influencer hype without substance often leads to pump-and-dumps. Verify the claims.' }, // Guaranteed loss - chasing hype
+    // Negative / Loss Events
+    { id: 2, type: 'tweet', title: 'Influencer Tweet: Promising Project Alert!', description: 'A popular crypto influencer is hyping a new project with ambitious goals. DYOR!', potentialGain: '100x (maybe)', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Influencer hype without substance often leads to pump-and-dumps. Verify the claims.' },
     { id: 4, type: 'scamOpportunity', title: 'Exclusive Presale Invitation', description: 'An opportunity to invest in a promising new token before it hits the market. Limited spots available! Contract unverified.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Unverified contracts are extremely risky and a common sign of scams.' },
     { id: 7, type: 'news', title: 'Major Exchange Lists $SAFE', description: '$SAFE token has just been listed on a top-tier exchange! Price jumped 30% in the last hour.', token: 'SAFE', delayedEffect: true, isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Investing *after* a major listing pump ("sell the news") can be dangerous as early investors take profits.' },
     { id: 8, type: 'tweet', title: 'Elon Mentions Altcoin Project (Yesterday!)', description: 'Elon Musk tweeted about an altcoin yesterday, causing a massive pump. Is it too late to get in?', potentialGain: '???', isHighRisk: true, delayedEffect: true, isGuaranteedLoss: true, subtleClue: 'Chasing pumps based on old news (even celebrity tweets) is often a losing strategy.' },
@@ -93,30 +96,35 @@ const MOCK_EVENTS: Omit<GameEvent, 'actionOptions'>[] = [
     { id: 15, type: 'exploit', title: 'Protocol Hack Reported', description: 'Breaking news: A popular DeFi protocol has been exploited. Token price is tanking.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Investing in hacked projects, even after a price drop, is very risky until the vulnerability is fixed and funds are potentially recovered.' },
     { id: 18, type: 'daoDrama', title: 'Dev Threatens to Fork', description: 'Lead developer of GARBAGECOIN is threatening to fork the project after a community disagreement.', token: 'GARBAGE', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Internal project conflicts and fork threats often negatively impact token price due to uncertainty and division.' },
     { id: 19, type: 'scamOpportunity', title: 'Telegram "Signal Group" Tip', description: 'Got a "guaranteed 5x" signal from a private Telegram group. Requires buying a low-cap token immediately.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Paid "signal groups" are often pump-and-dump schemes orchestrating exit liquidity for insiders.' },
-    { id: 22, type: 'microcap', title: 'New Microcap Gem? (100k Mcap)', description: 'Found a token with a tiny market cap. Devs seem active on Telegram. Could this be the next 1000x?', potentialGain: '1000x?', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Extremely low market cap tokens are highly volatile and susceptible to manipulation or abandonment ("rug pull"). Risk is immense.' }, // Often rugs
+    { id: 22, type: 'microcap', title: 'New Microcap Gem? (100k Mcap)', description: 'Found a token with a tiny market cap. Devs seem active on Telegram. Could this be the next 1000x?', potentialGain: '1000x?', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Extremely low market cap tokens are highly volatile and susceptible to manipulation or abandonment ("rug pull"). Risk is immense.' },
     { id: 23, type: 'exploit', title: 'Flash Loan Exploit on DEX', description: 'A DEX pool involving $SAFE was just exploited using a flash loan, manipulating the price temporarily.', token: 'SAFE', sentimentEffect: 'panic', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Flash loan exploits can cause extreme, temporary price volatility. Trading during such events is dangerous.' },
     { id: 24, type: 'daoDrama', title: 'DAO Treasury Debate Heated', description: 'Major disagreement in the GARBAGECOIN DAO over how to spend treasury funds. Contentious vote upcoming.', token: 'GARBAGE', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Contentious DAO governance can signal instability and potentially lead to negative price action or forks.' },
     { id: 25, type: 'rumor', title: 'Token Unlock Approaching', description: 'Large token unlock schedule for early investors of $CLOWN is coming next week.', token: 'CLOWN', isHighRisk: true, delayedEffect: true, isGuaranteedLoss: true, subtleClue: 'Large token unlocks often lead to selling pressure as early investors cash out, potentially decreasing the price.' },
     { id: 27, type: 'nftOpportunity', title: 'NFT Project "Migrates" to V2', description: 'The "Sad Shibas" NFT project announced a V2 migration. Holders need to burn V1 and mint V2. Some fees apply.', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'V2 migrations can sometimes be legitimate upgrades, but are also used as tactics in slow rug pulls or cash grabs. Investigate the reasons and fees.' },
     { id: 28, type: 'scamOpportunity', title: 'Airdrop Claim Requires Seed Phrase', description: 'A website claims you\'re eligible for a huge $SAFE airdrop, but requires entering your seed phrase to verify.', isHighRisk: true, potentialGain: 'Free Tokens!', isGuaranteedLoss: true, subtleClue: 'NEVER enter your seed phrase on any website. This is ALWAYS a scam to steal your funds.' },
     { id: 29, type: 'news', title: 'Competitor Project Gains Traction', description: 'A major competitor to Project CLOWNCHAIN seems to be gaining significant user adoption.', token: 'CLOWN', isHighRisk: true, isGuaranteedLoss: true, subtleClue: 'Strong competition can negatively impact a project\'s market share and token price if they fail to innovate or retain users.' },
-    { id: 6, type: 'marketShift', title: 'Market Euphoria!', description: 'Green candles everywhere! A wave of optimism sweeps through the crypto space.', sentimentEffect: 'euphoric', subtleClue: 'Extreme euphoria often signals a market top. Buying during peak hype is very risky (Exit Liquidity). Bear markets are born in euphoria.' }, // Investing here is a loss
+    { id: 6, type: 'marketShift', title: 'Market Euphoria!', description: 'Green candles everywhere! A wave of optimism sweeps through the crypto space.', sentimentEffect: 'euphoric', subtleClue: 'Extreme euphoria often signals a market top. Buying during peak hype is very risky (Exit Liquidity). Bear markets are born in euphoria.' },
 
-    // Positive / Potential Profit Events (Increased multipliers)
-    { id: 1, type: 'rumor', title: 'Rumor Mill: New Altcoin Gaining Traction', description: 'Whispers on CryptoX suggest a new altcoin could be the next big thing. Dev wallet holds 50% of supply.', potentialGain: '5x-10x?', isHighRisk: true, profitMultiplier: 2.5, subtleClue: 'High dev wallet concentration often signals centralization risk or potential dump.' }, // Increased multiplier (2.5x return -> 1.5x profit)
-    { id: 5, type: 'rumor', title: 'Tech Breakthrough Announced', description: 'Reports of a significant technological advancement in a lesser-known project emerge. Seems legit?', token: 'GARBAGE', isHighRisk: false, profitMultiplier: 2.0, subtleClue: 'Genuine tech advancements can drive value, assuming the report is accurate.' }, // Increased multiplier (2x return -> 1x profit)
-    { id: 9, type: 'news', title: 'Project Audit Results Released', description: 'Project CLOWNCHAIN passed its security audit! Report looks clean.', token: 'CLOWN', isHighRisk: false, delayedEffect: false, isGuaranteedProfit: true, profitMultiplier: 1.2, subtleClue: 'A successful audit from a reputable firm reduces security risks, but doesn\'t guarantee price appreciation. Small profit potential.' }, // Modest but safer profit (1.2x return -> 0.2x profit)
-    { id: 11, type: 'marketShift', title: 'Massive Liquidation Cascade', description: 'Panic selling triggers a cascade of liquidations across major platforms. Sentiment is rock bottom.', sentimentEffect: 'panic', subtleClue: 'Panic selling can present buying opportunities ("buy the dip" or "buy when there is blood in the streets"), but timing is critical and risky. Ensure the project fundamentals remain sound. Bull markets are often born in depression like this.' }, // Investing here *could* be positive -> High reward potential defined later (Multiplier boosted in logic)
-    { id: 12, type: 'nftOpportunity', title: 'Hyped NFT Mint LIVE!', description: 'A new PFP project with huge Discord buzz is minting now! Floor could 10x, or go to zero.', potentialGain: '10x?', isHighRisk: true, delayedEffect: true, profitMultiplier: 4.0, subtleClue: 'NFT mints are highly volatile. Success often depends on timing, overall market sentiment, and team execution, not just hype.' }, // Increased multiplier significantly (4x return -> 3x profit)
-    { id: 16, type: 'rumor', title: 'Partnership Speculation', description: 'Rumors swirling about a potential partnership between Project CLOWNCHAIN and a major tech company.', token: 'CLOWN', isHighRisk: false, delayedEffect: true, profitMultiplier: 1.8, subtleClue: 'Partnership rumors can pump prices, but gains often fade if the partnership isn\'t confirmed or impactful ("buy the rumor, sell the news").' }, // Increased multiplier (1.8x return -> 0.8x profit)
-    { id: 21, type: 'utilityLaunch', title: 'Project XYZ Launches Mainnet App', description: 'After months of development, Project XYZ has launched its utility application on mainnet.', token: 'XYZ', isHighRisk: false, isGuaranteedProfit: true, profitMultiplier: 1.5, subtleClue: 'Successful mainnet launches *can* drive price if the utility gains adoption, but often the hype is already priced in.' }, // Increased multiplier (1.5x return -> 0.5x profit)
-    { id: 26, type: 'tweet', title: 'Mysterious Dev Tweet', description: 'Lead dev of $XYZ tweeted a cryptic message: "Big things coming. Phase 2 imminent." Vague!', token: 'XYZ', isHighRisk: true, profitMultiplier: 1.6, subtleClue: 'Vague, hype-driven tweets without concrete details are often used to pump prices short-term. Be wary of "announcements of announcements".' }, // Increased multiplier (1.6x return -> 0.6x profit)
-    { id: 30, type: 'marketShift', title: 'Fear & Greed Index at "Extreme Fear"', description: 'The Crypto Fear & Greed Index has dropped to "Extreme Fear" levels amidst market declines.', sentimentEffect: 'panic', isHighRisk: true, profitMultiplier: 2.8, subtleClue: '"Extreme Fear" can indicate maximum pessimism, potentially signaling a market bottom (Contrarian Indicator). Buying here is risky but can be rewarding.' }, // Increased multiplier for contrarian play (2.8x return -> 1.8x profit)
+    // Positive / Potential Profit Events
+    { id: 1, type: 'rumor', title: 'Rumor Mill: New Altcoin Gaining Traction', description: 'Whispers on CryptoX suggest a new altcoin could be the next big thing. Dev wallet holds 50% of supply.', potentialGain: '5x-10x?', isHighRisk: true, profitMultiplier: 3.0, subtleClue: 'High dev wallet concentration often signals centralization risk or potential dump.' },
+    { id: 5, type: 'rumor', title: 'Tech Breakthrough Announced', description: 'Reports of a significant technological advancement in a lesser-known project emerge. Seems legit?', token: 'GARBAGE', isHighRisk: false, profitMultiplier: 2.5, subtleClue: 'Genuine tech advancements can drive value, assuming the report is accurate.' },
+    { id: 9, type: 'news', title: 'Project Audit Results Released', description: 'Project CLOWNCHAIN passed its security audit! Report looks clean.', token: 'CLOWN', isHighRisk: false, delayedEffect: false, isGuaranteedProfit: true, profitMultiplier: 1.3, subtleClue: 'A successful audit from a reputable firm reduces security risks, but doesn\'t guarantee price appreciation. Small profit potential.' },
+    { id: 11, type: 'marketShift', title: 'Massive Liquidation Cascade', description: 'Panic selling triggers a cascade of liquidations across major platforms. Sentiment is rock bottom.', sentimentEffect: 'panic', subtleClue: 'Panic selling can present buying opportunities ("buy the dip" or "buy when there is blood in the streets"), but timing is critical and risky. Ensure the project fundamentals remain sound. Bull markets are often born in depression like this.' , profitMultiplier: 3.5 },
+    { id: 12, type: 'nftOpportunity', title: 'Hyped NFT Mint LIVE!', description: 'A new PFP project with huge Discord buzz is minting now! Floor could 10x, or go to zero.', potentialGain: '10x?', isHighRisk: true, delayedEffect: true, profitMultiplier: 4.5, subtleClue: 'NFT mints are highly volatile. Success often depends on timing, overall market sentiment, and team execution, not just hype.' },
+    { id: 16, type: 'rumor', title: 'Partnership Speculation', description: 'Rumors swirling about a potential partnership between Project CLOWNCHAIN and a major tech company.', token: 'CLOWN', isHighRisk: false, delayedEffect: true, profitMultiplier: 2.2, subtleClue: 'Partnership rumors can pump prices, but gains often fade if the partnership isn\'t confirmed or impactful ("buy the rumor, sell the news").' },
+    { id: 21, type: 'utilityLaunch', title: 'Project XYZ Launches Mainnet App', description: 'After months of development, Project XYZ has launched its utility application on mainnet.', token: 'XYZ', isHighRisk: false, isGuaranteedProfit: true, profitMultiplier: 1.8, subtleClue: 'Successful mainnet launches *can* drive price if the utility gains adoption, but often the hype is already priced in.' },
+    { id: 26, type: 'tweet', title: 'Mysterious Dev Tweet', description: 'Lead dev of $XYZ tweeted a cryptic message: "Big things coming. Phase 2 imminent." Vague!', token: 'XYZ', isHighRisk: true, profitMultiplier: 2.0, subtleClue: 'Vague, hype-driven tweets without concrete details are often used to pump prices short-term. Be wary of "announcements of announcements".' },
+    { id: 30, type: 'marketShift', title: 'Fear & Greed Index at "Extreme Fear"', description: 'The Crypto Fear & Greed Index has dropped to "Extreme Fear" levels amidst market declines.', sentimentEffect: 'panic', isHighRisk: true, profitMultiplier: 3.2, subtleClue: '"Extreme Fear" can indicate maximum pessimism, potentially signaling a market bottom (Contrarian Indicator). Buying here is risky but can be rewarding.' },
+    { id: 31, type: 'positiveDevelopment', title: 'Community Grant Approved for Project XYZ!', description: 'Project XYZ has successfully secured a significant development grant from a well-known foundation. Funds will be used for scaling and new features.', token: 'XYZ', isGuaranteedProfit: true, profitMultiplier: 2.0, subtleClue: 'Grants provide resources and signal external validation for a project, often leading to positive sentiment and development progress.' },
+    { id: 32, type: 'positiveDevelopment', title: 'Successful Protocol Upgrade Deployed', description: 'Project CLOWNCHAIN just deployed a major protocol upgrade, improving efficiency and adding new functionality. No issues reported.', token: 'CLOWN', isGuaranteedProfit: true, profitMultiplier: 1.6, subtleClue: 'Smooth protocol upgrades can boost investor confidence and attract new users by demonstrating technical competence and progress.' },
+    { id: 33, type: 'news', title: 'Positive Regulatory Clarity Emerges', description: 'A government agency released a statement clarifying some regulations around DeFi, which is being interpreted positively by the market.', isHighRisk: false, isGuaranteedProfit: true, profitMultiplier: 1.5, subtleClue: 'Positive regulatory news can reduce uncertainty and attract institutional interest, often leading to market upticks.' },
+    { id: 34, type: 'rumor', title: 'Whale Accumulation Detected for GARBAGECOIN', description: 'On-chain data suggests a few large wallets (whales) have been steadily accumulating GARBAGECOIN over the past week.', token: 'GARBAGE', isHighRisk: false, profitMultiplier: 2.8, subtleClue: 'Whale accumulation can sometimes precede price pumps as large holders anticipate positive news or try to drive up the price. However, it can also be market manipulation.' },
+    { id: 35, type: 'nftOpportunity', title: 'Blue-Chip NFT Project Announces Airdrop for Holders', description: 'Holders of the "CryptoPunks V3" NFT collection will receive an airdrop of new "PunkDoge" tokens. Speculation is driving up Punk V3 prices.', isHighRisk: false, profitMultiplier: 1.9, subtleClue: 'Airdrops from established projects can generate significant value for holders, often causing the price of the parent NFT or token to increase in anticipation.' },
 
-    // Neutral / Context Events (Outcome depends on action/sentiment)
-    { id: 3, type: 'marketShift', title: 'Market Jitters', description: 'Uncertainty looms as regulatory discussions intensify. Market sentiment showing signs of turning bearish.', sentimentEffect: 'bearish', subtleClue: 'Investing during market uncertainty or "jitters" is often risky as sentiment can sour quickly. Bear markets are born in euphoria and bull markets in depression.' }, // Outcome depends on action/sentiment -> negative outcome defined later (slight loss)
-    { id: 17, type: 'marketShift', title: 'Stablecoin Depegs Slightly', description: 'A major stablecoin briefly lost its peg, causing some market instability.', sentimentEffect: 'bearish', subtleClue: 'Stablecoin depegs can cause widespread panic and negatively impact even unrelated assets due to loss of confidence.' }, // Neutral outcome for this specific event (investing = small loss)
-    { id: 20, type: 'news', title: 'New Regulation Proposed', description: 'Governments are discussing new regulations for DeFi. Market is reacting cautiously.', sentimentEffect: 'neutral', subtleClue: 'Regulatory news can create long-term uncertainty or opportunity. The impact depends heavily on the specifics of the regulation.' }, // Neutral outcome (investing = small gain/loss)
+    // Neutral / Context Events
+    { id: 3, type: 'marketShift', title: 'Market Jitters', description: 'Uncertainty looms as regulatory discussions intensify. Market sentiment showing signs of turning bearish.', sentimentEffect: 'bearish', subtleClue: 'Investing during market uncertainty or "jitters" is often risky as sentiment can sour quickly. Bear markets are born in euphoria and bull markets are born in depression.' },
+    { id: 17, type: 'marketShift', title: 'Stablecoin Depegs Slightly', description: 'A major stablecoin briefly lost its peg, causing some market instability.', sentimentEffect: 'bearish', subtleClue: 'Stablecoin depegs can cause widespread panic and negatively impact even unrelated assets due to loss of confidence.' },
+    { id: 20, type: 'news', title: 'New Regulation Proposed', description: 'Governments are discussing new regulations for DeFi. Market is reacting cautiously.', sentimentEffect: 'neutral', subtleClue: 'Regulatory news can create long-term uncertainty or opportunity. The impact depends heavily on the specifics of the regulation.' },
 ];
 
 
@@ -142,21 +150,17 @@ const getMockTokenPrice = (token: TokenSymbol, sentiment: GameState['marketSenti
         default: break;
     }
 
-    // Simulate price drift over days with randomness and volatility
-    // Using Math.sin for some cyclical nature, plus random noise
-    const timeFactor = Math.sin(day / 5) * 0.1 + 1; // Slow cycle effect
-    const randomNoise = (Math.random() - 0.5) * 2 * volatility; // Random daily fluctuation based on volatility
+    const timeFactor = Math.sin(day / 5) * 0.1 + 1;
+    const randomNoise = (Math.random() - 0.5) * 2 * volatility;
 
-    // Ensure price doesn't go below a very small floor (e.g., 0.0001)
     return Math.max(0.0001, basePrice * sentimentMultiplier * timeFactor * (1 + randomNoise));
 };
 
 interface PortfolioHistoryPoint {
     day: number;
-    value: number; // Total portfolio value
+    value: number;
 }
 
-// Chart Configuration
 const chartConfig = {
     value: {
         label: "Portfolio Value (DAI)",
@@ -172,18 +176,17 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [isFinished, setIsFinished] = React.useState(false);
     const [isCompleted, setIsCompleted] = React.useState(false);
-    const [investmentPercentage, setInvestmentPercentage] = React.useState<number>(25); // Default 25%
-    const [earnedXp, setEarnedXp] = React.useState(0); // Track earned XP for final display
+    const [investmentPercentage, setInvestmentPercentage] = React.useState<number>(25);
+    const [earnedXp, setEarnedXp] = React.useState(0);
 
     const handleStartGame = () => {
         setIsPlaying(true);
         setIsFinished(false);
         setIsCompleted(false);
-        setEarnedXp(0); // Reset earned XP display
-        setGameState(INITIAL_STATE); // Reset to initial state, including usedEventIds
-        setInvestmentPercentage(25); // Reset slider
-        // Trigger the first day/event immediately after starting
-        handleNextDay(INITIAL_STATE);
+        setEarnedXp(0);
+        setGameState({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
+        setInvestmentPercentage(25);
+        handleNextDay({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
     };
 
      const handleNextDay = (currentState: GameState = gameState) => {
@@ -192,12 +195,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
              return;
          }
 
-         // --- Game Logic for advancing a day ---
          const nextDay = currentState.day + 1;
-
-         // 1. Clear the outcome from the previous turn (Handled by setting outcomeEvent to null below)
-
-         // 2. Update Market Sentiment (can be influenced by events or drift)
          let newSentiment = currentState.marketSentiment;
          const sentimentRoll = Math.random();
          if (sentimentRoll < 0.05 && newSentiment !== 'panic') newSentiment = 'panic';
@@ -206,62 +204,74 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
          else if (sentimentRoll < 0.9 && newSentiment !== 'bullish') newSentiment = 'bullish';
          else if (newSentiment !== 'euphoric') newSentiment = 'euphoric';
 
+        let newEventFull: GameEvent;
+        let currentNextUsedEventIds = [...currentState.usedEventIds]; // Renamed to avoid conflict in handlePlayerAction
+        let currentConsecutiveNegativeEvents = currentState.consecutiveNegativeEvents || 0;
 
-         // 3. Generate a new, unique event
-         let newEvent: GameEvent | null = null;
-         let nextUsedEventIds = [...currentState.usedEventIds];
+        const isEventHighlyNegative = (event: Omit<GameEvent, 'actionOptions'>): boolean => {
+            return !!event.isGuaranteedLoss &&
+                   (event.type === 'scamOpportunity' ||
+                    event.type === 'exploit' ||
+                    (event.title && event.title.toLowerCase().includes('rug pull')) ||
+                    (event.title && event.title.toLowerCase().includes('honeypot')));
+        };
 
-         // Filter out events already used in this cycle
-         let availableEvents = MOCK_EVENTS.filter(event => !currentState.usedEventIds.includes(event.id));
+        let eventPoolSource = MOCK_EVENTS.filter(event => !currentState.usedEventIds.includes(event.id));
+        if (eventPoolSource.length === 0) {
+            console.warn("All unique events shown. Resetting and allowing repeats.");
+            currentNextUsedEventIds = [];
+            eventPoolSource = MOCK_EVENTS;
+        }
 
-         // If all unique events have been shown, reset the used list and allow repeats
-         if (availableEvents.length === 0) {
-             console.warn("All unique events shown in this cycle. Resetting and allowing repeats.");
-             nextUsedEventIds = []; // Reset used IDs
-             availableEvents = MOCK_EVENTS; // Use all events again
+        let candidateEvent: Omit<GameEvent, 'actionOptions'>;
+
+        if (currentConsecutiveNegativeEvents >= 2) { // Threshold to intervene
+            const nonHighlyNegativePool = eventPoolSource.filter(e => !isEventHighlyNegative(e));
+            if (nonHighlyNegativePool.length > 0) {
+                candidateEvent = nonHighlyNegativePool[Math.floor(Math.random() * nonHighlyNegativePool.length)];
+            } else {
+                candidateEvent = eventPoolSource[Math.floor(Math.random() * eventPoolSource.length)];
+            }
+        } else {
+            candidateEvent = eventPoolSource[Math.floor(Math.random() * eventPoolSource.length)];
+        }
+
+        if (isEventHighlyNegative(candidateEvent)) {
+            currentConsecutiveNegativeEvents++;
+        } else {
+            currentConsecutiveNegativeEvents = 0;
+        }
+
+        newEventFull = { ...candidateEvent, actionOptions: ['Invest', 'Ignore'] };
+        if (!currentNextUsedEventIds.includes(newEventFull.id)) { // Ensure ID is added only if not from a reset pool
+            currentNextUsedEventIds.push(newEventFull.id);
+        }
+
+
+         if (newEventFull.sentimentEffect) {
+             newSentiment = newEventFull.sentimentEffect;
          }
 
-         // Select a random event from the available ones
-         const eventToShow = availableEvents[Math.floor(Math.random() * availableEvents.length)];
-         newEvent = { ...eventToShow };
-         nextUsedEventIds.push(newEvent.id); // Add the new event's ID to the used list for the *next* state update
-
-
-         // Override sentiment if event specifies it
-         if (newEvent.sentimentEffect) {
-             newSentiment = newEvent.sentimentEffect;
-         }
-
-         // Determine Action Options based on the Event Type
-         let actionOptions = ['Ignore']; // Default action
-         // All events are now investable or ignorable
-         actionOptions = ['Invest', 'Ignore'];
-         newEvent.actionOptions = actionOptions;
-
-         // 4. Calculate current portfolio value and update history
-         const currentTotalValue = currentState.balance; // Value is just the balance now
-         // Ensure we don't duplicate day 0 if restarting
+         const currentTotalValue = currentState.balance;
          const historyBase = currentState.history.length > 1 && currentState.history[currentState.history.length-1].day === currentState.day
                              ? currentState.history.slice(0, -1)
                              : currentState.history;
          const newHistory = [...historyBase, { day: nextDay, value: currentTotalValue }];
 
-
-
          setGameState(prev => ({
              ...prev,
              day: nextDay,
-             currentEvent: newEvent,
-             outcomeEvent: null, // Clear previous outcome
+             currentEvent: newEventFull,
+             outcomeEvent: null,
              marketSentiment: newSentiment,
-             lastActionStatus: null, // Clear previous action status
+             lastActionStatus: null,
              balance: currentTotalValue,
-             history: newHistory, // Update history
-             usedEventIds: nextUsedEventIds, // Update used event IDs
+             history: newHistory,
+             usedEventIds: currentNextUsedEventIds,
+             consecutiveNegativeEvents: currentConsecutiveNegativeEvents,
          }));
      };
 
-    // --- Refactored handlePlayerAction for deterministic outcomes ---
     const handlePlayerAction = (action: string) => {
         const event = gameState.currentEvent;
         if (!event || !event.actionOptions?.includes(action)) return;
@@ -270,13 +280,15 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
         let newBalance = gameState.balance;
         let newPonziScore = gameState.ponziScore;
         let outcome: GameOutcomeEvent | null = null;
+        // Initialize nextUsedEventIds from the current state
+        let nextUsedEventIds = [...gameState.usedEventIds];
+        let currentConsecutiveNegativeEvents = gameState.consecutiveNegativeEvents;
+
 
         const investmentAmount = gameState.balance * (investmentPercentage / 100);
         const feedbackClue = event.subtleClue ? ` Hint: ${event.subtleClue}` : "";
 
-        // --- Determine Outcome ---
-        let isSuccess = false; // Default to failure/neutral
-        let profit = 0; // Default profit/loss is 0
+        let profit = 0;
 
         if (action === 'Invest') {
             if (investmentAmount <= 0) {
@@ -286,79 +298,33 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                 statusUpdate += ' Not enough balance!';
                 outcome = { type: 'neutral', description: `Insufficient funds to invest $${investmentAmount.toFixed(2)} DAI.` };
             } else {
-                // --- Investment Logic ---
-                let outcomeType: GameOutcomeEvent['type'] = 'negative'; // Default to negative for investments
+                let outcomeType: GameOutcomeEvent['type'] = 'negative';
 
-                // 1. Check for guaranteed losses
                 if (event.isGuaranteedLoss) {
-                    isSuccess = false;
-                    profit = -investmentAmount; // Lose the exact amount invested
-                    newPonziScore += 15; // Increase Ponzi score for falling for guaranteed loss
-                    outcomeType = 'negative';
+                    profit = -investmentAmount;
+                    newPonziScore += 15;
                 }
-                // 2. Check for specific negative scenarios based on context
-                else if (event.title === 'Market Euphoria!') {
-                    isSuccess = false;
-                    profit = -investmentAmount * 0.6; // Lose 60% buying the top (slightly higher loss)
-                    newPonziScore += 5;
-                    outcomeType = 'negative';
-                }
-                else if (event.title === 'Market Jitters') {
-                    isSuccess = false;
-                    profit = -investmentAmount * 0.2; // Smaller loss for jitters (20%)
-                    outcomeType = 'negative';
-                }
-                 else if (event.type === 'nftOpportunity' && (gameState.marketSentiment === 'neutral' || gameState.marketSentiment === 'bearish' || gameState.marketSentiment === 'panic')) {
-                     isSuccess = false;
-                     profit = -investmentAmount * 0.8; // NFT fails harder in bad market (lose 80%)
-                     newPonziScore += 10;
-                     outcomeType = 'negative';
-                 }
-                  else if (event.title === 'Stablecoin Depegs Slightly') {
-                     isSuccess = false;
-                     profit = -investmentAmount * 0.1; // Small loss for investing during stablecoin depeg
-                     outcomeType = 'negative';
-                 }
-                 else if (event.title === 'New Regulation Proposed') {
-                    isSuccess = false;
-                    profit = -investmentAmount * 0.05; // Tiny loss for neutral event
-                    outcomeType = 'negative';
-                 }
-                // 3. Check for guaranteed profits (generally small)
+                else if (event.title === 'Market Euphoria!') { profit = -investmentAmount * 0.6; newPonziScore += 5; }
+                else if (event.title === 'Market Jitters') { profit = -investmentAmount * 0.2; }
+                else if (event.type === 'nftOpportunity' && (gameState.marketSentiment === 'neutral' || gameState.marketSentiment === 'bearish' || gameState.marketSentiment === 'panic') && event.profitMultiplier === 4.5 ) { profit = -investmentAmount * 0.8; newPonziScore += 10;}
+                else if (event.title === 'Stablecoin Depegs Slightly') { profit = -investmentAmount * 0.1; }
+                else if (event.title === 'New Regulation Proposed') { profit = -investmentAmount * 0.05;}
                 else if (event.isGuaranteedProfit) {
-                    isSuccess = true;
-                    // Profit is investment * (multiplier - 1)
-                    profit = investmentAmount * ((event.profitMultiplier || 1.2) - 1); // Default to 20% profit if multiplier not set
+                    profit = investmentAmount * ((event.profitMultiplier || 1.2) - 1);
                     outcomeType = 'positive';
                 }
-                // 4. Default positive outcomes (non-guaranteed loss/profit, not NFT in bad market)
                 else {
-                     isSuccess = true;
-                     // Profit = investment * (multiplier - 1)
-                     // Use event multiplier or default to 2.0 (100% profit) if not set (Increased default)
                      let baseMultiplier = event.profitMultiplier || 2.0;
-
-                     // Adjust multiplier based on sentiment (less impact than before, base multiplier is key)
-                     if (gameState.marketSentiment === 'euphoric') baseMultiplier *= 1.1; // Slightly less boost in euphoria
-                     if (gameState.marketSentiment === 'bullish') baseMultiplier *= 1.2; // More boost in bullish
-                     if (gameState.marketSentiment === 'bearish') baseMultiplier *= 0.8; // Slightly larger reduction
-                     if (gameState.marketSentiment === 'panic') baseMultiplier *= 0.7; // Larger reduction in panic
-
-                     // Special case for buying during panic (contrarian) - boosted multiplier
-                     if (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) {
-                        baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 2.8); // Use event's boosted multiplier or 2.8 default
-                     }
-                     // Ensure multiplier is at least 1 (break even)
+                     if (gameState.marketSentiment === 'euphoric') baseMultiplier *= 1.1;
+                     if (gameState.marketSentiment === 'bullish') baseMultiplier *= 1.2;
+                     if (gameState.marketSentiment === 'bearish') baseMultiplier *= 0.8;
+                     if (gameState.marketSentiment === 'panic') baseMultiplier *= 0.7;
+                     if (event.title === 'Massive Liquidation Cascade' || (event.title && event.title.includes('Extreme Fear'))) { baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 3.5); }
                      baseMultiplier = Math.max(1.0, baseMultiplier);
-
-                     profit = investmentAmount * (baseMultiplier - 1); // Calculate profit based on the final multiplier
+                     profit = investmentAmount * (baseMultiplier - 1);
                      outcomeType = 'positive';
                 }
-
-                // Apply profit/loss to balance
                 newBalance += profit;
-
-                // --- Construct Outcome Description ---
                 if (outcomeType === 'negative') {
                      let reason = "Investment failed.";
                      if (event.isGuaranteedLoss && event.type === 'scamOpportunity') reason = `It was a trap! The '${event.title}' rugged.`;
@@ -367,68 +333,47 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                      else if (event.isGuaranteedLoss) reason = `The setup for '${event.title}' was unfavorable.`;
                      else if (event.title === 'Market Euphoria!') reason = `Bought the top during Market Euphoria! Remember: Bear markets are born in euphoria.`;
                      else if (event.title === 'Market Jitters') reason = `Investing during Market Jitters proved too risky.`;
-                      else if (event.title === 'Stablecoin Depegs Slightly') reason = `Investing during the stablecoin depeg was risky.`;
-                      else if (event.title === 'New Regulation Proposed') reason = `The market reacted poorly to the proposed regulation.`;
-                     else if (event.type === 'nftOpportunity') reason = `The NFT market was too cold for '${event.title}' to succeed.`;
-
+                     else if (event.title === 'Stablecoin Depegs Slightly') reason = `Investing during the stablecoin depeg was risky.`;
+                     else if (event.title === 'New Regulation Proposed') reason = `The market reacted poorly to the proposed regulation.`;
+                     else if (event.type === 'nftOpportunity'  && event.profitMultiplier === 4.5) reason = `The NFT market was too cold for '${event.title}' to succeed.`;
                      outcome = { type: 'negative', description: `${reason} Lost ${Math.abs(profit).toFixed(2)} DAI.${feedbackClue}`, profit: profit };
                      statusUpdate += ` Investment failed. Lost ${Math.abs(profit).toFixed(2)} DAI.`;
-                 } else { // Positive outcome
-                     const panicBuyMessage = (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) ? " Buying during extreme fear paid off! Remember: Bull markets are often born in depression." : "";
-                     const profitPercentage = profit > 0 ? (profit / investmentAmount) * 100 : 0;
+                 } else {
+                     const panicBuyMessage = (event.title === 'Massive Liquidation Cascade' || (event.title && event.title.includes('Extreme Fear'))) ? " Buying during extreme fear paid off! Remember: Bull markets are often born in depression." : "";
+                     const profitPercentage = profit > 0 && investmentAmount > 0 ? (profit / investmentAmount) * 100 : 0;
                      outcome = { type: 'positive', description: `Good call on '${event.title}'! Your investment of $${investmentAmount.toFixed(2)} DAI yielded a profit of $${profit.toFixed(2)} DAI (+${profitPercentage.toFixed(1)}%)!${panicBuyMessage}${feedbackClue}`, profit: profit };
                      statusUpdate += ` Gained $${profit.toFixed(2)} DAI!`;
                  }
-
             }
         } else if (action === 'Ignore') {
-            // --- Ignore Logic ---
             statusUpdate += ` Market sentiment: ${gameState.marketSentiment}.`;
-            let ignoreOutcomeType: GameOutcomeEvent['type'] = 'neutral';
             let ignoreDescription = `You ignored '${event.title}'.`;
+            let potentialProfitIfInvested = 0;
+            const simulatedInvestment = gameState.balance * 0.25; // Use 25% as a consistent base for missed opportunity calculation
 
-            // Determine what *would* have happened if invested (using same deterministic logic)
-            let potentialProfit = 0;
-            let wouldHaveBeenSuccess = false;
-            const simulatedInvestment = gameState.balance * 0.25; // Simulate potential outcome based on 25% investment
-
-             if (event.isGuaranteedLoss || event.title === 'Market Euphoria!' || event.title === 'Market Jitters' || event.title === 'Stablecoin Depegs Slightly' || event.title === 'New Regulation Proposed' || (event.type === 'nftOpportunity' && ['neutral', 'bearish', 'panic'].includes(gameState.marketSentiment))) {
-                 wouldHaveBeenSuccess = false;
-                 // Calculate potential loss based on the specific negative scenario
-                 if (event.title === 'Market Euphoria!') potentialProfit = -(simulatedInvestment * 0.6);
-                 else if (event.title === 'Market Jitters') potentialProfit = -(simulatedInvestment * 0.2);
-                 else if (event.title === 'Stablecoin Depegs Slightly') potentialProfit = -(simulatedInvestment * 0.1);
-                 else if (event.title === 'New Regulation Proposed') potentialProfit = -(simulatedInvestment * 0.05);
-                 else if (event.type === 'nftOpportunity') potentialProfit = -(simulatedInvestment * 0.8);
-                 else potentialProfit = -simulatedInvestment; // Default guaranteed loss
-
-             } else { // Calculate potential profit
-                 wouldHaveBeenSuccess = true;
-                  // Use event multiplier or default to 2.0 if not set
+             if (event.isGuaranteedLoss || event.title === 'Market Euphoria!' || event.title === 'Market Jitters' || event.title === 'Stablecoin Depegs Slightly' || event.title === 'New Regulation Proposed' || (event.type === 'nftOpportunity' && ['neutral', 'bearish', 'panic'].includes(gameState.marketSentiment) && event.profitMultiplier === 4.5)) {
+                 if (event.title === 'Market Euphoria!') potentialProfitIfInvested = -(simulatedInvestment * 0.6);
+                 else if (event.title === 'Market Jitters') potentialProfitIfInvested = -(simulatedInvestment * 0.2);
+                 else if (event.title === 'Stablecoin Depegs Slightly') potentialProfitIfInvested = -(simulatedInvestment * 0.1);
+                 else if (event.title === 'New Regulation Proposed') potentialProfitIfInvested = -(simulatedInvestment * 0.05);
+                 else if (event.type === 'nftOpportunity' && event.profitMultiplier === 4.5) potentialProfitIfInvested = -(simulatedInvestment * 0.8);
+                 else potentialProfitIfInvested = -simulatedInvestment;
+                 ignoreDescription += ` Good call! It turned out to be ${event.type === 'scamOpportunity' || event.isGuaranteedLoss ? 'a rug/scam or bad setup' : 'a losing trade'}. You avoided a potential loss of ~$${Math.abs(potentialProfitIfInvested).toFixed(2)} DAI.${feedbackClue}`;
+             } else {
                  let baseMultiplier = event.profitMultiplier || 2.0;
                  if (gameState.marketSentiment === 'euphoric') baseMultiplier *= 1.1;
                  if (gameState.marketSentiment === 'bullish') baseMultiplier *= 1.2;
                  if (gameState.marketSentiment === 'bearish') baseMultiplier *= 0.8;
                  if (gameState.marketSentiment === 'panic') baseMultiplier *= 0.7;
-                  if (event.title === 'Massive Liquidation Cascade' || event.title.includes('Extreme Fear')) {
-                     baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 2.8); // Use boosted multiplier
-                  }
-                  baseMultiplier = Math.max(1.0, baseMultiplier); // Ensure >= 1
-                 potentialProfit = simulatedInvestment * (baseMultiplier - 1); // Calculate potential profit
+                  if (event.title === 'Massive Liquidation Cascade' || (event.title && event.title.includes('Extreme Fear'))) { baseMultiplier = Math.max(baseMultiplier, event.profitMultiplier || 3.5); }
+                  baseMultiplier = Math.max(1.0, baseMultiplier);
+                 potentialProfitIfInvested = simulatedInvestment * (baseMultiplier - 1);
+                 ignoreDescription += ` Turns out it pumped! You missed out on a potential profit of ~$${potentialProfitIfInvested.toFixed(2)} DAI.`;
              }
-
-            if (wouldHaveBeenSuccess) {
-                ignoreDescription += ` Turns out it pumped! You missed out on a potential profit of ~$${potentialProfit.toFixed(2)} DAI.`;
-            } else {
-                 ignoreDescription += ` Good call! It turned out to be ${event.type === 'scamOpportunity' || event.isGuaranteedLoss ? 'a rug/scam or bad setup' : 'a losing trade'}. You avoided a potential loss of ~$${Math.abs(potentialProfit).toFixed(2)} DAI.${feedbackClue}`;
-            }
-
-            outcome = { type: ignoreOutcomeType, description: ignoreDescription };
+            outcome = { type: 'neutral', description: ignoreDescription };
         }
 
-         // Calculate portfolio value AFTER action and update history for the current day again
-         const valueAfterAction = Math.max(0, newBalance); // Ensure balance doesn't go negative
-         // Update the history point for the *current* day with the value *after* the action
+         const valueAfterAction = Math.max(0, newBalance);
          const updatedHistory = gameState.history.map(h =>
              h.day === gameState.day ? { ...h, value: valueAfterAction } : h
          );
@@ -438,9 +383,11 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
              balance: valueAfterAction,
              ponziScore: newPonziScore,
              lastActionStatus: statusUpdate,
-             currentEvent: null, // Clear event after action
-             outcomeEvent: outcome, // Show the outcome
-             history: updatedHistory, // Update history with value after action for the current day
+             currentEvent: null,
+             outcomeEvent: outcome,
+             history: updatedHistory,
+             usedEventIds: nextUsedEventIds, // Ensure this is correctly passed
+             consecutiveNegativeEvents: currentConsecutiveNegativeEvents, // Ensure this is correctly passed
          }));
     };
 
@@ -448,25 +395,21 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
     const handleEndGame = (finalState: GameState) => {
         setIsPlaying(false);
         setIsFinished(true);
-        // Final value is already tracked in the last history point or current balance
         const finalTotalValue = finalState.history[finalState.history.length - 1]?.value ?? finalState.balance;
-
         const resultMessage = `Survived ${finalState.day} days! Final Value: $${finalTotalValue.toFixed(2)} DAI. Ponzi Score: ${finalState.ponziScore}.`;
         setGameState(prev => ({ ...prev, lastActionStatus: resultMessage }));
 
         const performanceFactor = finalTotalValue / INITIAL_BALANCE;
-         let finalEarnedXp = 0; // Use a separate variable for the final XP calculation
-         // More nuanced XP based on performance and Ponzi score
-         if (performanceFactor > 1) { // Profitable
-            // Base XP for profit, reduced by high Ponzi score
+         let finalEarnedXp = 0;
+         if (performanceFactor > 1) {
              finalEarnedXp = Math.floor(xpReward * Math.min(1, (performanceFactor - 1)) * Math.max(0.1, (1 - finalState.ponziScore / 100)));
-         } else if (finalTotalValue <= 0.1 * INITIAL_BALANCE) { // Rekt (less than 10% initial balance)
-             finalEarnedXp = 5; // Small XP for getting totally rekt (learning the hard way)
-         } else { // Loss, but not rekt
-             finalEarnedXp = 10; // Base XP for surviving but losing
+         } else if (finalTotalValue <= 0.1 * INITIAL_BALANCE) {
+             finalEarnedXp = 5;
+         } else {
+             finalEarnedXp = 10;
          }
-         finalEarnedXp = Math.max(0, Math.min(xpReward, finalEarnedXp)); // Ensure XP is within bounds
-         setEarnedXp(finalEarnedXp); // Set state for display
+         finalEarnedXp = Math.max(0, Math.min(xpReward, finalEarnedXp));
+         setEarnedXp(finalEarnedXp);
 
         if (!isCompleted && finalEarnedXp > 0) {
              addXp(finalEarnedXp);
@@ -479,7 +422,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                      duration: 7000,
                  });
              }, 0);
-         } else if (!isCompleted) { // Added condition to prevent duplicate toast if already completed (e.g., score 0)
+         } else if (!isCompleted) {
              setTimeout(() => {
                  toast({
                      title: "Cycle Complete!",
@@ -491,23 +434,18 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
     };
 
     const handleContinueNextDay = () => {
-        // Simply advance the day, clearing the outcome
         handleNextDay(gameState);
     };
 
     const handleRestartGame = () => {
-         // Reset all state related to the game instance
          setIsPlaying(false);
          setIsFinished(false);
          setIsCompleted(false);
          setEarnedXp(0);
-         setGameState(INITIAL_STATE); // Reset to initial state
-         setInvestmentPercentage(25); // Reset slider
-
-         // Immediately start the game again
-         setIsPlaying(true); // Set playing to true before calling handleNextDay
-         handleNextDay(INITIAL_STATE); // Start day 1
-
+         setGameState({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
+         setInvestmentPercentage(25);
+         setIsPlaying(true);
+         handleNextDay({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
          setTimeout(() => {
              toast({
                  title: "Restarting Cycle!",
@@ -517,15 +455,38 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
          }, 0);
      };
 
+    const handleFlexResult = () => {
+        const appUrl = "https://abc-de-fi.vercel.app/";
+        const flexMessage = `${username} survived ${gameState.day} days in the DeFi Degen Cycle! Final Score: $${gameState.balance.toFixed(2)} DAI. Ponzi Score: ${gameState.ponziScore}. Can you beat me? #DeFiDegenGame #ABCDeFi Try it: ${appUrl}`;
+        navigator.clipboard.writeText(flexMessage)
+            .then(() => {
+                toast({
+                    title: "Result Copied! 🚀",
+                    description: `Share your degen story: ${flexMessage.substring(0,100)}...`,
+                    variant: "success",
+                    duration: 7000,
+                });
+            })
+            .catch(err => {
+                console.error("Failed to copy text:", err);
+                toast({
+                    title: "Copy Failed",
+                    description: "Could not copy result to clipboard.",
+                    variant: "destructive",
+                });
+            });
+    };
+
+
     return (
          <Card className={cn(
             "flex flex-col min-h-[600px] relative overflow-hidden",
-            "bg-gradient-to-br from-primary/[.40] to-accent/[.40]", // Gradient background with opacity
+            "bg-gradient-to-br from-primary/[.40] to-accent/[.40]",
             "text-primary-foreground",
              className
          )}>
             <div className="relative z-10 flex flex-col flex-1">
-                 <CardHeader className="bg-transparent"> {/* Removed bg-primary to inherit gradient */}
+                 <CardHeader className="bg-transparent">
                     <div className="flex justify-between items-start">
                         <div className="flex-1 text-center">
                             <CardTitle className="flex items-center justify-center gap-2 text-lg md:text-xl text-primary-foreground">
@@ -553,11 +514,6 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                             </Popover>
                         </div>
                     </div>
-                     {isFinished && (
-                         <Badge variant={isCompleted && earnedXp > 0 ? "success" : "default"} className="w-fit mt-1 text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
-                             {isCompleted && earnedXp > 0 ? `Completed (+${earnedXp} XP)` : "Finished"}
-                         </Badge>
-                     )}
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-between space-y-4">
 
@@ -575,7 +531,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
 
                     {isPlaying && !isFinished && (
                         <div className="flex-1 flex flex-col space-y-4">
-                            <div className="h-[200px] border border-primary-foreground/20 p-2 rounded-md bg-primary/50"> {/* Changed background to primary/50 */}
+                            <div className="h-[200px] border border-primary-foreground/20 p-2 rounded-md bg-primary/50">
                                 <ChartContainer config={chartConfig} className="h-full w-full">
                                     <LineChart
                                         accessibilityLayer
@@ -621,7 +577,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                 </ChartContainer>
                             </div>
 
-                            <div className="flex justify-between items-center text-base border border-primary-foreground/20 p-2 rounded-md text-primary-foreground/90 bg-primary/50"> {/* Changed background */}
+                            <div className="flex justify-between items-center text-base border border-primary-foreground/20 p-2 rounded-md text-primary-foreground/90 bg-primary/50">
                                 <span>Day: {gameState.day} / {gameState.maxDays}</span>
                                 <span>Balance: <span className={cn(
                                     "font-semibold",
@@ -636,8 +592,8 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                 )}>{gameState.marketSentiment}</span></span>
                             </div>
 
-                            {gameState.currentEvent?.actionOptions?.includes('Invest') && !gameState.outcomeEvent && ( // Only show slider when invest is an option and outcome not shown
-                                <div className="space-y-2 bg-primary/50 p-3 rounded-md"> {/* Changed background */}
+                            {gameState.currentEvent?.actionOptions?.includes('Invest') && !gameState.outcomeEvent && (
+                                <div className="space-y-2 bg-primary/50 p-3 rounded-md">
                                     <Label htmlFor="investment-slider" className="text-base text-primary-foreground/90">Investment % (of Balance): {investmentPercentage}%</Label>
                                     <Slider
                                         id="investment-slider"
@@ -651,7 +607,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                             )}
 
                             {gameState.outcomeEvent ? (
-                                <Card className="bg-primary border-primary-foreground/20 text-primary-foreground"> {/* Changed background */}
+                                <Card className="bg-primary border-primary-foreground/20 text-primary-foreground">
                                     <CardHeader className="pb-2 pt-3 px-3">
                                         <CardTitle className="text-lg flex items-center gap-1 text-primary-foreground">
                                             {gameState.outcomeEvent.type === 'positive' && <TrendingUp size={16} className="text-green-400"/>}
@@ -666,15 +622,15 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                     <Button onClick={handleContinueNextDay} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">Continue to Day {gameState.day + 1}</Button>
                                 </Card>
                             ) : gameState.currentEvent ? (
-                                <Card className="bg-primary border-primary-foreground/20 text-primary-foreground"> {/* Changed background */}
+                                <Card className="bg-primary border-primary-foreground/20 text-primary-foreground">
                                     <CardHeader className="pb-2 pt-3 px-3">
                                         <CardTitle className="text-lg flex items-center gap-1 text-primary-foreground">
                                             {gameState.currentEvent.type === 'rumor' && <Brain size={16} className="text-purple-400"/>}
                                             {gameState.currentEvent.type === 'tweet' && <Send size={16} className="text-blue-400"/>}
                                             {gameState.currentEvent.type === 'marketShift' && (gameState.marketSentiment === 'bearish' || gameState.marketSentiment === 'panic' ? <TrendingDown size={16} className="text-red-400"/> : <TrendingUp size={16} className="text-green-400"/>)}
                                             {['scamOpportunity', 'exploit'].includes(gameState.currentEvent.type) && <TrendingDown size={16} className="text-yellow-400"/>}
-                                            {['news', 'utilityLaunch'].includes(gameState.currentEvent.type) && <Info size={16} className="text-primary-foreground/70"/>}
-                                            {gameState.currentEvent.type === 'nftOpportunity' && <ImageIcon size={16} className="text-indigo-400"/>}
+                                            {['news', 'utilityLaunch', 'positiveDevelopment'].includes(gameState.currentEvent.type) && <Info size={16} className="text-primary-foreground/70"/>}
+                                            {gameState.currentEvent.type === 'nftOpportunity' && <ImageIconLucide size={16} className="text-indigo-400"/>}
                                             {['daoDrama', 'microcap'].includes(gameState.currentEvent.type) && <HelpCircle size={16} className="text-orange-400"/>}
                                             {gameState.currentEvent.title}
                                         </CardTitle>
@@ -698,7 +654,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                     </CardContent>
                                 </Card>
                             ) : (
-                                <div className="flex-1 flex items-center justify-center text-center text-primary-foreground/70 italic p-4 border border-primary-foreground/20 border-dashed rounded-md min-h-[100px] text-base bg-primary/50"> {/* Changed background */}
+                                <div className="flex-1 flex items-center justify-center text-center text-primary-foreground/70 italic p-4 border border-primary-foreground/20 border-dashed rounded-md min-h-[100px] text-base bg-primary/50">
                                     {gameState.lastActionStatus || "Processing..."}
                                 </div>
                             )}
@@ -708,32 +664,55 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                     )}
 
                     {isFinished && (
-                        <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
-                            <h3 className="text-2xl font-semibold text-primary-foreground">Cycle Ended!</h3>
-                            <div className="h-[150px] w-full max-w-md border border-primary-foreground/20 p-1 rounded-md bg-primary/50"> {/* Changed background */}
-                                <ChartContainer config={chartConfig} className="h-full w-full">
-                                    <LineChart data={gameState.history} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--primary-foreground)/0.2)" />
-                                        <XAxis dataKey="day" hide />
-                                        <YAxis hide domain={['auto', 'auto']}/>
-                                         <RechartsTooltip
-                                            cursor={false}
-                                            contentStyle={{ backgroundColor: 'hsl(var(--background)/0.8)', border: '1px solid hsl(var(--border)/0.5)', color: 'hsl(var(--foreground))' }}
-                                            itemStyle={{ color: 'hsl(var(--foreground))' }}
-                                            content={<ChartTooltipContent indicator="dot" hideLabel />}
-                                          />
-                                        <Line dataKey="value" type="monotone" stroke="var(--color-value)" strokeWidth={2} dot={false}/>
-                                    </LineChart>
-                                </ChartContainer>
-                            </div>
-                            <p className="text-base text-primary-foreground/80 text-center">{gameState.lastActionStatus || "Game Over"}</p>
-                            {earnedXp > 0 && <p className="text-primary font-medium text-lg">Earned {earnedXp} XP!</p>}
-                            <div className="flex gap-4">
-                                {/* Flex Button is disabled/non-functional */}
-                                <Button variant="outline" className="gap-2 text-base border-primary-foreground/30 text-primary-foreground/90 hover:bg-primary-foreground/10" disabled>
-                                <Send size={16}/> Flex Result
-                                </Button>
-                            </div>
+                         <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
+                            {isCompleted && earnedXp > 0 && (
+                                <Badge variant="success" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
+                                     Completed
+                                 </Badge>
+                             )}
+                             {!isCompleted && earnedXp === 0 && (
+                                <Badge variant="default" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
+                                     Finished
+                                 </Badge>
+                             )}
+                             <h3 className="text-3xl font-semibold text-primary-foreground mt-2">Cycle Ended!</h3>
+                             <p className="text-lg text-primary-foreground/80 text-center mb-2">
+                                {gameState.lastActionStatus || "Game Over"}
+                             </p>
+
+                            <Button
+                                variant="default"
+                                size="lg"
+                                className={cn(
+                                    "p-0 rounded-lg shadow-lg",
+                                    "bg-transparent hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0",
+                                    "h-auto w-auto"
+                                )}
+                                onClick={handleFlexResult}
+                                aria-label="Copy game result to share"
+                            >
+                                <div className="flex flex-col items-center p-6 rounded-lg bg-primary/80 hover:bg-primary/90 border border-primary-foreground/30 text-primary-foreground w-full text-center transition-colors">
+                                    <Image
+                                        src="https://i.ibb.co/bMgZz4h4/a-logo-for-a-crypto-learning-and-gaming-applicatio.png"
+                                        alt="ABC DeFi Logo"
+                                        width={Math.round(78 * 1.2 * 1.2)}
+                                        height={Math.round(19.5 * 1.2 * 1.2)}
+                                        className="h-auto mb-3"
+                                        unoptimized
+                                    />
+                                    <span className="text-lg font-semibold" style={{ fontSize: '1.2rem' }}>DeFi Degen: Survive the Cycle</span>
+                                    <span className={cn(
+                                        "text-5xl font-bold my-2",
+                                        gameState.balance >= INITIAL_BALANCE ? "text-green-400" : "text-red-400"
+                                    )} style={{ fontSize: '3.6rem' }}>
+                                        ${gameState.balance.toFixed(2)} <span className="text-2xl text-primary-foreground/80" style={{ fontSize: '1.8rem' }}>DAI</span>
+                                    </span>
+                                    <div className="flex items-center gap-2 text-lg text-primary-foreground/70" style={{ fontSize: '1.2rem' }}>
+                                      <Send size={Math.round(22 * 1.2)}/>
+                                      <span>Flex!</span>
+                                    </div>
+                                </div>
+                            </Button>
                         </div>
                     )}
                 </CardContent>
@@ -741,3 +720,4 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
         </Card>
     );
 }
+
