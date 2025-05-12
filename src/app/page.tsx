@@ -117,26 +117,7 @@ export default function Home() {
              {/* DeFiDegenGame added here */}
             <DeFiDegenGame className="md:col-span-2 lg:col-span-3 h-full" questId={8} xpReward={250} />
 
-            {/* Completed Quests Card moved to the bottom */}
-            <Card className="md:col-span-2 lg:col-span-3 h-full">
-              <CardHeader>
-                <CardTitle>Completed Quests</CardTitle>
-                 <CardDescription className="text-xs text-muted-foreground">(Note: This list shows progress on all quest types, including scam quests.)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {quests.filter(q => q.completed).map(quest => (
-                    <li key={quest.id} className="flex items-center justify-between text-sm text-foreground">
-                      <span className='flex items-center gap-2'>{quest.icon} {quest.title}</span>
-                      <Check className="text-accent" size={16} />
-                    </li>
-                  ))}
-                  {quests.filter(q => q.completed).length === 0 && (
-                    <p className="text-sm text-foreground">No quests completed yet.</p>
-                  )}
-                </ul>
-              </CardContent>
-            </Card>
+            {/* Completed Quests Card REMOVED from here */}
 
           </div>
         </main>
@@ -144,3 +125,4 @@ export default function Home() {
     </div>
   );
 }
+
