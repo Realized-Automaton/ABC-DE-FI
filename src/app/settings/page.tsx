@@ -12,18 +12,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Bell, Lock, Camera, Wallet, Copy } from 'lucide-react';
+import { User, Bell, Lock, Camera, Wallet, Copy, Gift } from 'lucide-react'; // Added Gift icon
 import { useUser } from '@/context/user-context';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ConnectWalletButton } from '@/components/connect-wallet-button';
-import { useAccount } from 'wagmi'; // Import useAccount hook
+// Removed useAccount import as we are using a static address now
 
 // Helper to truncate wallet address
 const truncateAddress = (address: string | undefined) => {
-    if (!address) return "Not Connected";
+    if (!address) return "N/A"; // Should not happen with static address
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
 };
+
+const TIP_JAR_ADDRESS = "0x111080E59a5E7348b90136A85aC4F2d9887A8FE1";
 
 export default function SettingsPage() {
   const { username, setUsername, profilePicture, setProfilePicture } = useUser();
@@ -32,7 +34,6 @@ export default function SettingsPage() {
   const [localUsername, setLocalUsername] = React.useState(username);
   const [localProfilePicture, setLocalProfilePicture] = React.useState<string | null>(profilePicture);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const { address, isConnected } = useAccount(); // Get wallet address and connection state
 
   React.useEffect(() => {
       setLocalUsername(username);
@@ -125,18 +126,15 @@ export default function SettingsPage() {
     fileInputRef.current?.click();
   };
 
-   const handleCopyAddress = () => {
-        if (!address) return;
-        navigator.clipboard.writeText(address)
+   const handleCopyTipJarAddress = () => {
+        navigator.clipboard.writeText(TIP_JAR_ADDRESS)
             .then(() => {
-                 // Defer toast notification using setTimeout
                  setTimeout(() => {
-                    toast({ title: "Address Copied!", description: address });
+                    toast({ title: "Tip Jar Address Copied!", description: TIP_JAR_ADDRESS });
                  }, 0);
             })
             .catch(err => {
                 console.error("Failed to copy address:", err);
-                 // Defer toast notification using setTimeout
                  setTimeout(() => {
                     toast({ title: "Copy Failed", description: "Could not copy address to clipboard.", variant: "destructive"});
                  }, 0);
@@ -147,20 +145,19 @@ export default function SettingsPage() {
   return (
     <div className="flex min-h-screen w-full">
       <Sidebar>
-        <SidebarHeader className="p-4 flex justify-center w-full"> {/* Ensure flex and justify-center */}
-          {/* Replace text with larger logo */}
+        <SidebarHeader className="p-4 flex justify-center w-full">
           <Image
-              src="https://i.ibb.co/bMgZz4h4/a-logo-for-a-crypto-learning-and-gaming-applicatio.png" // Updated logo URL
-              alt="ABC De-fi Logo" // Updated alt text
-              width={120} // Increased width
-              height={30} // Increased height proportionally or adjust as needed
-              className="h-auto mx-auto" // Maintain aspect ratio and add mx-auto
-              unoptimized // If using external hosting like ibb without pro plan
+              src="https://i.ibb.co/bMgZz4h4/a-logo-for-a-crypto-learning-and-gaming-applicatio.png"
+              alt="ABC De-fi Logo"
+              width={120}
+              height={30}
+              className="h-auto mx-auto"
+              unoptimized
           />
         </SidebarHeader>
         <SidebarContent className="p-4 flex-1">
           <SidebarNavigation />
-          <div className="flex flex-col items-center py-4"> {/* Removed mt-auto */}
+          <div className="flex flex-col items-center py-4">
             <Image
               src="https://i.ibb.co/CKy4DsqZ/defi-made-simple.png"
               alt="DeFi Made Simple Banner"
@@ -179,39 +176,34 @@ export default function SettingsPage() {
 
       <SidebarInset className="flex flex-col">
          <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4">
-             {/* Container for Trigger and Mobile Logo */}
              <div className="flex items-center gap-2">
                <SidebarTrigger className="md:hidden" />
-               {/* Logo for mobile view */}
                <div className="md:hidden">
                  <Image
                    src="https://i.ibb.co/bMgZz4h4/a-logo-for-a-crypto-learning-and-gaming-applicatio.png"
                    alt="ABC De-fi Logo"
-                   width={80} // Smaller width for mobile header
-                   height={20} // Adjust height proportionally
-                   className="h-auto mx-auto" // Center mobile logo
+                   width={80}
+                   height={20}
+                   className="h-auto mx-auto"
                    unoptimized
                  />
                </div>
              </div>
-             {/* Container for Buttons */}
-             <div className="ml-auto flex items-center gap-2"> {/* Use ml-auto to push buttons right */}
+             <div className="ml-auto flex items-center gap-2">
                <ConnectWalletButton />
-               <div className="md:hidden"> {/* Mobile Theme Toggle */}
+               <div className="md:hidden">
                  <ThemeToggleButton />
                </div>
              </div>
          </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6 md:text-base"> {/* Added md:text-base */}
+        <main className="flex-1 overflow-auto p-4 md:p-6 md:text-base">
           <div className="grid gap-6 max-w-2xl mx-auto">
-             {/* Account Settings */}
              <Card>
                <CardHeader>
                  <CardTitle className="flex items-center gap-2"><User size={20}/> Account</CardTitle>
                  <CardDescription>Manage your public profile and account details.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-6">
-                 {/* Profile Picture Section */}
                  <div className="flex items-center gap-4">
                     <Avatar className="h-20 w-20 cursor-pointer relative group" onClick={handleAvatarClick}>
                         <AvatarImage src={localProfilePicture ?? undefined} alt={username} className="object-cover" />
@@ -236,37 +228,34 @@ export default function SettingsPage() {
                     </div>
                  </div>
 
-                 {/* Username Section */}
                  <div className="space-y-2">
                    <Label htmlFor="username">Username</Label>
                    <Input id="username" value={localUsername} onChange={handleUsernameChange} placeholder="Your public username" />
                  </div>
-                 {/* Wallet Connection Display */}
+                 <Button onClick={handleSaveChanges}>Save Changes</Button>
+
+                 {/* Tip Jar Section */}
                  <div className="space-y-2">
-                    <Label>Wallet Address</Label>
+                    <Label className="flex items-center gap-1">
+                        <Gift size={16} className="text-primary"/> <span className="text-accent">Tip Jar</span>
+                    </Label>
                     <div className="flex items-center justify-between rounded-md border p-3 bg-muted/50">
-                        <div className="flex items-center gap-2 overflow-hidden"> {/* Added overflow-hidden */}
+                        <div className="flex items-center gap-2 overflow-hidden">
                              <Wallet size={16} className="text-muted-foreground flex-shrink-0"/>
                              <span className="text-sm text-muted-foreground truncate">
-                                {isConnected ? truncateAddress(address) : "Not Connected"}
+                                {truncateAddress(TIP_JAR_ADDRESS)}
                              </span>
                          </div>
-                         {isConnected && address && (
-                            <Button variant="ghost" size="icon" onClick={handleCopyAddress} className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                                <Copy size={14} />
-                                <span className="sr-only">Copy Address</span>
-                            </Button>
-                         )}
-                         {!isConnected && (
-                              <span className="text-xs text-primary">(Connect via header)</span>
-                         )}
+                        <Button variant="ghost" size="icon" onClick={handleCopyTipJarAddress} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                            <Copy size={14} />
+                            <span className="sr-only">Copy Tip Jar Address</span>
+                        </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground">Enjoying the app? Consider sending a tip!</p>
                  </div>
-                 <Button onClick={handleSaveChanges}>Save Changes</Button>
                </CardContent>
              </Card>
 
-             {/* Notification Settings */}
              <Card>
                <CardHeader>
                  <CardTitle className="flex items-center gap-2"><Bell size={20}/> Notifications</CardTitle>
@@ -289,7 +278,6 @@ export default function SettingsPage() {
                </CardContent>
              </Card>
 
-              {/* Security Settings (Placeholder) */}
              <Card>
                <CardHeader>
                  <CardTitle className="flex items-center gap-2"><Lock size={20}/> Security</CardTitle>
@@ -307,3 +295,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
