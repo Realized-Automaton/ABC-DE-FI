@@ -438,18 +438,17 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
     };
 
     const handleRestartGame = () => {
-         setIsPlaying(false);
+         setIsPlaying(false); // Set isPlaying to false to show the initial start screen
          setIsFinished(false);
          setIsCompleted(false);
          setEarnedXp(0);
          setGameState({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
          setInvestmentPercentage(25);
-         setIsPlaying(true);
-         handleNextDay({...INITIAL_STATE, history: [{ day: 0, value: INITIAL_BALANCE }], consecutiveNegativeEvents: 0});
+         // Do not call handleNextDay here, let the user click "Start the Cycle"
          setTimeout(() => {
              toast({
-                 title: "Restarting Cycle!",
-                 description: "Fresh start, fresh pain. Good luck!",
+                 title: "Game Reset!",
+                 description: "Ready for another cycle? Good luck!",
                  icon: <RefreshCw size={16} />
              });
          }, 0);
