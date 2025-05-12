@@ -10,7 +10,7 @@ import { ConnectWalletButton } from '@/components/connect-wallet-button'; // Imp
 export default function BadgesPage() {
   // Mock Data - replace with actual user badge data
   const unlockedBadges = ['Intro Badge', 'Swap Master', 'Faucet User'];
-  const lockedBadges = ['LP Apprentice', 'Scam Spotter', 'Contract Caller'];
+  const lockedBadges = ['Add a Custom Token', 'Scam Spotter', 'Contract Caller']; // Replaced LP Apprentice
 
   return (
     <div className="flex min-h-screen w-full">
