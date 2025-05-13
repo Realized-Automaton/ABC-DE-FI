@@ -6,7 +6,7 @@ import Image from 'next/image'; // Import next/image
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 // Removed Skull, ShieldCheck import, added Target, Timer, CheckSquare, Volume2, VolumeX
-import { Target, Timer, CheckSquare, Volume2, VolumeX } from 'lucide-react';
+import { Target, Timer, CheckSquare, Volume2, VolumeX, KeyRound } from 'lucide-react'; // Added KeyRound for easter egg toast
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/context/user-context';
@@ -26,9 +26,12 @@ const scammerImageUrls = [
     'https://i.ibb.co/9mdyMq2k/tuah4.png',      // tuah4 -> Scammer
 ];
 const safeImageUrls = [
-    'https://i.ibb.co/ymK3nQ5s/Heart6.png',     // Heart6 -> Safe
+    'https://i.ibb.co/ymK3nQ5s/Heart6.png',     // Heart6 -> Safe (This is Richard Heart)
     'https://i.ibb.co/WYgcRpv/CZ2.png',        // CZ2 -> Safe
 ];
+
+const RICHARD_HEART_IMAGE_URL = 'https://i.ibb.co/ymK3nQ5s/Heart6.png';
+const DOOR_UNLOCK_SOUND_URL = "https://www.soundjay.com/misc/sounds/sounds-8/door-open-1.mp3"; // Placeholder sound
 
 // Helper function to get a random element from an array
 const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -46,7 +49,7 @@ interface WhackAScammerGameProps {
 
 export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameProps) {
     const { toast } = useToast();
-    const { addXp } = useUser();
+    const { addXp, username } = useUser(); // Get username from context
     // Use the new MoleData type for state
     const [moles, setMoles] = React.useState<MoleData[]>(Array(GRID_SIZE).fill({ state: 'hidden' }));
     const [score, setScore] = React.useState(0);
@@ -58,6 +61,7 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
     const timerRef = React.useRef<NodeJS.Timeout | null>(null);
     const moleTimerRef = React.useRef<NodeJS.Timeout | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    const unlockAudioRef = React.useRef<HTMLAudioElement | null>(null); // Audio ref for unlock sound
 
     const cleanupTimers = () => {
         if (timerRef.current) {
@@ -92,6 +96,9 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                 } else {
                     pauseAudio(); // Pause if muting
                 }
+            }
+            if (unlockAudioRef.current) {
+                unlockAudioRef.current.muted = newMuted; // Mute/unmute unlock sound as well
             }
             return newMuted;
         });
@@ -210,6 +217,8 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
         if (!isPlaying || moles[index].state === 'hidden') return;
 
         const moleType = moles[index].state;
+        const moleImageUrl = moles[index].imageUrl; // Get the image URL
+
         // Hide immediately
         setMoles(prev => {
             const newMoles = prev.map(m => ({...m})); // Deep copy
@@ -217,11 +226,36 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
             return newMoles;
         });
 
+        // Easter egg logic
+        if (username.toLowerCase() === 'richard heart' && moleImageUrl === RICHARD_HEART_IMAGE_URL && moleType === 'safe') {
+            if (unlockAudioRef.current && !isMuted) {
+                unlockAudioRef.current.currentTime = 0; // Rewind to start
+                unlockAudioRef.current.volume = 0.7;
+                unlockAudioRef.current.play().catch(error => console.error("Unlock sound play failed:", error));
+            }
+            // Using setTimeout to ensure toast appears after other state updates
+            setTimeout(() => {
+                toast({ 
+                    title: <span className="flex items-center gap-1"><KeyRound size={18}/> Easter Egg Unlocked!</span>, 
+                    description: "You found a secret!", 
+                    variant: "success", 
+                    duration: 4000 
+                });
+            },0);
+            // For the easter egg, we might not want to penalize the score.
+            // The scoring below will handle the normal cases.
+             // No score change or toast for the easter egg click itself, just the sound and success toast.
+            return; // Exit early to prevent normal scoring logic for this specific click
+        }
+
+
         if (moleType === 'scammer') {
             setScore(prevScore => prevScore + 10);
         } else if (moleType === 'safe') {
             setScore(prevScore => Math.max(0, prevScore - 5));
-            toast({ title: "Ouch!", description: "Don't hit the safe ones! (-5 points)", variant: "destructive", duration: 1500 });
+             setTimeout(() => {
+                toast({ title: "Ouch!", description: "Don't hit the safe ones! (-5 points)", variant: "destructive", duration: 1500 });
+            }, 0);
         }
     };
 
@@ -232,32 +266,46 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
     }, [timeLeft, isPlaying, score, stopGame]);
 
     React.useEffect(() => {
-        // Initialize audio ref
+        // Initialize audio ref for game music
         if (!audioRef.current) {
             audioRef.current = new Audio();
-            // Use the new audio file URL
-            audioRef.current.src = "https://audio.jukehost.co.uk/dv0ART9pPj4xB1M03ig2v0go15fuT2wo"; // <<< UPDATED LINK
+            audioRef.current.src = "https://audio.jukehost.co.uk/dv0ART9pPj4xB1M03ig2v0go15fuT2wo"; 
             audioRef.current.loop = true;
             audioRef.current.preload = "auto";
-            audioRef.current.muted = isMuted; // Set initial mute state
         }
+        // Initialize audio ref for unlock sound
+        if (!unlockAudioRef.current) {
+            unlockAudioRef.current = new Audio();
+            unlockAudioRef.current.src = DOOR_UNLOCK_SOUND_URL;
+            unlockAudioRef.current.preload = "auto";
+        }
+
+        // Set initial mute state for both audio elements
+        if (audioRef.current) audioRef.current.muted = isMuted;
+        if (unlockAudioRef.current) unlockAudioRef.current.muted = isMuted;
+        
 
         // Cleanup timers and audio on unmount
         return () => {
             cleanupTimers();
             pauseAudio();
             if (audioRef.current) {
-                audioRef.current.src = ""; // Release audio source
+                audioRef.current.src = ""; 
                 audioRef.current = null;
             }
+            if (unlockAudioRef.current) {
+                unlockAudioRef.current.pause();
+                unlockAudioRef.current.src = "";
+                unlockAudioRef.current = null;
+            }
         };
-    }, [isMuted]); // Re-run if isMuted changes (although toggleMute handles it now)
+    }, [isMuted]); // isMuted dependency ensures mute state is correctly applied on init and change
 
     const handleGameButtonClick = () => {
         if (isPlaying) {
-            stopGame(score); // Stop the game and show the current score
+            stopGame(score); 
         } else {
-            startGame(); // Start or restart the game
+            startGame(); 
         }
     };
 
@@ -267,8 +315,7 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                 <CardTitle className="flex items-center gap-2">
                     <Target className="text-primary" /> Whack-a-Scammer
                 </CardTitle>
-                {/* Updated description with larger text */}
-                <CardDescription className="md:text-base"> {/* Added md:text-base */}
+                <CardDescription className="md:text-base"> 
                     Click the scammer images, avoid the safe ones. Earn {XP_PER_POINT} XP per point.
                 </CardDescription>
                 {gameCompleted && !isPlaying && (
@@ -276,7 +323,6 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                         <CheckSquare size={16} /> XP Awarded
                     </Badge>
                 )}
-                 {/* Remove the placeholder note now */}
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center space-y-4">
                 <div className="flex justify-between w-full items-center mb-4 px-4">
@@ -286,14 +332,13 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 w-full max-w-xs aspect-square bg-muted/20 p-2 rounded-lg border"> {/* Reduced gap */}
+                <div className="grid grid-cols-3 gap-2 w-full max-w-xs aspect-square bg-muted/20 p-2 rounded-lg border"> 
                     {moles.map((mole, index) => (
                         <Button
                             key={index}
                             variant="outline"
                             className={cn(
-                                // Ensure button maintains aspect ratio and doesn't change size
-                                "aspect-square h-auto w-full flex items-center justify-center transition-all duration-100 ease-out relative overflow-hidden border-2 p-0", // Use aspect-square, h-auto, reduced padding
+                                "aspect-square h-auto w-full flex items-center justify-center transition-all duration-100 ease-out relative overflow-hidden border-2 p-0", 
                                 "hover:bg-accent/20 active:scale-95",
                                 mole.state === 'hidden' ? 'bg-card hover:bg-card/90' : 'bg-background',
                                 mole.state === 'scammer' ? 'border-destructive/50 hover:bg-destructive/10' : 'border-border',
@@ -309,22 +354,20 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                                 <Image
                                     src={mole.imageUrl}
                                     alt={mole.state}
-                                    layout="fill" // Use fill layout to cover the button area
-                                    objectFit="contain" // Ensure image fits within bounds, doesn't stretch
-                                    className="p-1" // Add some padding around the image inside the button
+                                    layout="fill" 
+                                    objectFit="contain" 
+                                    className="p-1" 
                                     data-ai-hint={mole.state === 'scammer' ? 'cartoon monster' : 'cartoon character'}
                                     unoptimized
                                 />
                             )}
-                             {/* No need for placeholder div when hidden, rely on button bg and grid size */}
                         </Button>
                     ))}
                 </div>
 
-                {/* Control buttons */}
                  <div className="flex items-center gap-4 mt-6">
                      <Button
-                         onClick={handleGameButtonClick} // Use the new handler
+                         onClick={handleGameButtonClick} 
                          size="lg"
                          variant={isPlaying ? "outline" : "default"}
                      >
@@ -335,7 +378,6 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                      </Button>
                  </div>
             </CardContent>
-            {/* Keyframes remain the same */}
             <style jsx>{`
                  @keyframes pop-in {
                      0% { transform: translateY(100%) scale(0.8); opacity: 0; }
@@ -360,3 +402,4 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
         </Card>
     );
 }
+
