@@ -2,68 +2,63 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image'; // Import next/image
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-// Removed Skull, ShieldCheck import, added Target, Timer, CheckSquare, Volume2, VolumeX
-import { Target, Timer, CheckSquare, Volume2, VolumeX, KeyRound } from 'lucide-react'; // Added KeyRound for easter egg toast
+import { Target, Timer, CheckSquare, Volume2, VolumeX, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/context/user-context';
 import { Badge } from '@/components/ui/badge';
 
-const GRID_SIZE = 9; // 3x3 grid
-const GAME_DURATION = 30; // seconds
-const APPEAR_INTERVAL = 1000; // ms
-const SCAMMER_CHANCE = 0.7; // 70% chance of being a scammer
-const XP_PER_POINT = 1; // Grant 1 XP per point scored (Changed from 0.5)
+const GRID_SIZE = 9;
+const GAME_DURATION = 30;
+const APPEAR_INTERVAL = 1000;
+const SCAMMER_CHANCE = 0.7;
+const XP_PER_POINT = 1;
 
-// Define image URLs using direct links - Updated with new links and correct categorization
 const scammerImageUrls = [
-    'https://i.ibb.co/rKC8ShGq/Broccili5.png', // Broccoli5 -> Scammer
-    'https://i.ibb.co/XZ5gGXzb/Sam1.png',      // Sam1 -> Scammer
-    'https://i.ibb.co/xKddvTtT/Portnoy3.png', // Portnoy3 -> Scammer
-    'https://i.ibb.co/9mdyMq2k/tuah4.png',      // tuah4 -> Scammer
+    'https://i.ibb.co/rKC8ShGq/Broccili5.png',
+    'https://i.ibb.co/XZ5gGXzb/Sam1.png',
+    'https://i.ibb.co/xKddvTtT/Portnoy3.png',
+    'https://i.ibb.co/9mdyMq2k/tuah4.png',
 ];
 const safeImageUrls = [
-    'https://i.ibb.co/ymK3nQ5s/Heart6.png',     // Heart6 -> Safe (This is Richard Heart)
-    'https://i.ibb.co/WYgcRpv/CZ2.png',        // CZ2 -> Safe
+    'https://i.ibb.co/ymK3nQ5s/Heart6.png',
+    'https://i.ibb.co/WYgcRpv/CZ2.png',
 ];
 
 const RICHARD_HEART_IMAGE_URL = 'https://i.ibb.co/ymK3nQ5s/Heart6.png';
-const DOOR_UNLOCK_SOUND_URL = "https://www.soundjay.com/misc/sounds/sounds-8/door-open-1.mp3"; // Placeholder sound
+const DOOR_UNLOCK_SOUND_URL = "https://voca.ro/1dSJNoOVemlR";
 
-// Helper function to get a random element from an array
 const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-// Updated state structure to hold image URL
 type MoleData = {
     state: 'hidden' | 'scammer' | 'safe';
-    imageUrl?: string; // URL of the image to display
+    imageUrl?: string;
 };
 
 interface WhackAScammerGameProps {
     className?: string;
-    challengeId?: string | number; // Optional ID for tracking completion/reward context
+    challengeId?: string | number;
 }
 
 export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameProps) {
     const { toast } = useToast();
-    const { addXp, username } = useUser(); // Get username from context
-    // Use the new MoleData type for state
+    const { addXp, username, activateEasterEgg } = useUser(); // Get activateEasterEgg from context
     const [moles, setMoles] = React.useState<MoleData[]>(Array(GRID_SIZE).fill({ state: 'hidden' }));
     const [score, setScore] = React.useState(0);
     const [timeLeft, setTimeLeft] = React.useState(GAME_DURATION);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [gameCompleted, setGameCompleted] = React.useState(false);
-    const [isMuted, setIsMuted] = React.useState(true); // Start muted
+    const [isMuted, setIsMuted] = React.useState(true);
     const finalScoreRef = React.useRef(0);
     const timerRef = React.useRef<NodeJS.Timeout | null>(null);
     const moleTimerRef = React.useRef<NodeJS.Timeout | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
-    const unlockAudioRef = React.useRef<HTMLAudioElement | null>(null); // Audio ref for unlock sound
+    const unlockAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
-    const cleanupTimers = () => {
+    const cleanupTimers = React.useCallback(() => {
         if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
@@ -72,49 +67,33 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
             clearInterval(moleTimerRef.current);
             moleTimerRef.current = null;
         }
-    };
+    }, []);
 
-    // --- Audio Controls ---
-    const playAudio = () => {
+    const playAudio = React.useCallback(() => {
         if (audioRef.current && !isMuted) {
-            audioRef.current.volume = 0.7; // Set volume
+            audioRef.current.volume = 0.7;
             audioRef.current.play().catch(error => console.error("Audio play failed:", error));
         }
-    };
+    }, [isMuted]);
 
-    const pauseAudio = () => {
+    const pauseAudio = React.useCallback(() => {
         audioRef.current?.pause();
-    };
+    }, []);
 
     const toggleMute = () => {
-        setIsMuted(prevMuted => {
-            const newMuted = !prevMuted;
-            if (audioRef.current) {
-                audioRef.current.muted = newMuted;
-                if (!newMuted && isPlaying) {
-                    playAudio(); // Play if unmuting during game
-                } else {
-                    pauseAudio(); // Pause if muting
-                }
-            }
-            if (unlockAudioRef.current) {
-                unlockAudioRef.current.muted = newMuted; // Mute/unmute unlock sound as well
-            }
-            return newMuted;
-        });
+        setIsMuted(prevMuted => !prevMuted);
     };
-     // --------------------
 
-    const startGame = () => {
+    const startGame = React.useCallback(() => {
         cleanupTimers();
         setScore(0);
         finalScoreRef.current = 0;
         setTimeLeft(GAME_DURATION);
         setIsPlaying(true);
         setGameCompleted(false);
-        setMoles(Array(GRID_SIZE).fill({ state: 'hidden' })); // Reset moles state
+        setMoles(Array(GRID_SIZE).fill({ state: 'hidden' }));
 
-        if (!isMuted) { // Start audio if not muted
+        if (!isMuted) {
             playAudio();
         }
 
@@ -131,23 +110,21 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
             setIsPlaying(playing => {
                 if (!playing) {
                     cleanupTimers();
-                    pauseAudio(); // Stop audio when game logic stops
+                    pauseAudio();
                     return false;
                 }
 
                 setMoles(prevMoles => {
-                    const newMoles: MoleData[] = prevMoles.map(mole => ({ ...mole })); // Deep copy
+                    const newMoles: MoleData[] = prevMoles.map(mole => ({ ...mole }));
 
-                    // Hide previous mole(s) with some probability
                     newMoles.forEach((mole, i) => {
                         if (mole.state !== 'hidden' && Math.random() > 0.4) {
                             newMoles[i] = { state: 'hidden' };
                         }
                     });
 
-                    // Show a new mole
                     const hiddenIndices = newMoles.map((mole, index) => mole.state === 'hidden' ? index : -1).filter(index => index !== -1);
-                    if (hiddenIndices.length === 0) return newMoles; // No space left
+                    if (hiddenIndices.length === 0) return newMoles;
 
                     const randomIndex = hiddenIndices[Math.floor(Math.random() * hiddenIndices.length)];
                     const isScammer = Math.random() < SCAMMER_CHANCE;
@@ -158,10 +135,9 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                         newMoles[randomIndex] = { state: 'safe', imageUrl: getRandomElement(safeImageUrls) };
                     }
 
-                    // Occasionally show two moles
                     if (hiddenIndices.length > 1 && Math.random() < 0.2) {
                         let secondIndex = hiddenIndices[Math.floor(Math.random() * hiddenIndices.length)];
-                        while (secondIndex === randomIndex) { // Ensure it's a different index
+                        while (secondIndex === randomIndex) {
                             secondIndex = hiddenIndices[Math.floor(Math.random() * hiddenIndices.length)];
                         }
                         const secondIsScammer = Math.random() < SCAMMER_CHANCE;
@@ -171,88 +147,120 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                             newMoles[secondIndex] = { state: 'safe', imageUrl: getRandomElement(safeImageUrls) };
                         }
                     }
-
                     return newMoles;
                 });
                 return true;
             });
         }, APPEAR_INTERVAL);
-    };
+    }, [cleanupTimers, isMuted, playAudio, pauseAudio]);
 
-    const stopGame = React.useCallback((finalScore: number) => {
+    const stopGame = React.useCallback((currentScore: number) => {
         cleanupTimers();
-        pauseAudio(); // Stop audio when game ends
+        pauseAudio();
         setIsPlaying(false);
-        finalScoreRef.current = finalScore;
-        setMoles(Array(GRID_SIZE).fill({ state: 'hidden' })); // Hide all moles
+        finalScoreRef.current = currentScore;
+        setMoles(Array(GRID_SIZE).fill({ state: 'hidden' }));
 
-        // Ensure finalScore is a number before proceeding
-        const scoreValue = typeof finalScore === 'number' ? finalScore : score;
+        const scoreValue = typeof currentScore === 'number' ? currentScore : 0;
 
         if (!gameCompleted && scoreValue > 0) {
             const earnedXp = Math.floor(scoreValue * XP_PER_POINT);
             if (earnedXp > 0) {
                 addXp(earnedXp);
-                 setTimeout(() => { // Defer toast
+                 setTimeout(() => {
                     toast({
                         title: "Game Over!",
                         description: `Final Score: ${scoreValue}. You earned ${earnedXp} XP!`,
-                        variant: "default"
+                        variant: "default",
+                        duration: 3000,
                     });
                  }, 0);
                 setGameCompleted(true);
             } else {
-                 setTimeout(() => { // Defer toast
-                     toast({ title: "Game Over!", description: `Final Score: ${scoreValue}` });
+                 setTimeout(() => {
+                     toast({ title: "Game Over!", description: `Final Score: ${scoreValue}`, duration: 3000 });
                  }, 0);
             }
         } else if (!gameCompleted) {
-            setTimeout(() => { // Defer toast
-                toast({ title: "Game Over!", description: `Final Score: ${scoreValue}` });
+             setTimeout(() => {
+                toast({ title: "Game Over!", description: `Final Score: ${scoreValue}`, duration: 3000 });
             }, 0);
         }
-    }, [addXp, gameCompleted, toast, score]); // Added score to dependency array
+    }, [addXp, gameCompleted, toast, cleanupTimers, pauseAudio]);
+
+    // Obscured logic for a special interaction.
+    // This function is intentionally less readable.
+    // It checks specific conditions related to user input and game state.
+    // If conditions are met, a special audio cue is played and a specific action is triggered.
+    const obscureLogic = React.useCallback((moleImageUrl?: string, moleType?: string) => {
+        const userAlias = username; // User's chosen alias.
+        const targetVisual = RICHARD_HEART_IMAGE_URL; // A specific visual target.
+        const visualType = 'safe'; // The expected type of the visual target.
+
+        // Condition check: User alias contains 'richard' and 'heart' (case-insensitive),
+        // the clicked mole's image URL matches the target visual,
+        // and the mole's type matches the expected visual type.
+        if (userAlias && userAlias.toLowerCase().includes('richard') && userAlias.toLowerCase().includes('heart') &&
+            moleImageUrl === targetVisual && moleType === visualType) {
+            
+            activateEasterEgg(); // Trigger a specific in-game event or state change.
+
+            const audioDevice = unlockAudioRef.current; // Reference to an audio element.
+            // Play a special sound effect if audio is not muted.
+            if (audioDevice && !isMuted) {
+                audioDevice.currentTime = 0; // Reset audio to start.
+                audioDevice.volume = 0.7; // Set volume.
+                audioDevice.play().catch(e => console.warn("Special sound effect playback failed.", e)); // Play audio, catch errors.
+            }
+             // Display a subtle confirmation message.
+            setTimeout(() => {
+                toast({
+                    title: <span className="flex items-center gap-1"><KeyRound size={18}/> Unlocked!</span>,
+                    description: "", // Kept empty for subtlety
+                    variant: "success",
+                    duration: 3000, // Short duration
+                });
+            }, 0);
+            return true; // Indicate that the special action was triggered.
+        }
+        return false; // Indicate no special action was triggered.
+    }, [username, isMuted, toast, activateEasterEgg]);
+
 
     const handleWhack = (index: number) => {
         if (!isPlaying || moles[index].state === 'hidden') return;
 
         const moleType = moles[index].state;
-        const moleImageUrl = moles[index].imageUrl; // Get the image URL
+        const moleImageUrl = moles[index].imageUrl;
 
-        // Hide immediately
+        // Check for special action first.
+        // The 'obscureLogic' function handles a specific hidden interaction.
+        // If it returns true, it means the special action was triggered,
+        // and we should update the mole's state to 'hidden' and then exit
+        // this handler to prevent normal scoring logic.
+        const specialActionTaken = obscureLogic(moleImageUrl, moleType);
+        if (specialActionTaken) {
+            setMoles(prev => {
+                const newMoles = prev.map(m => ({...m}));
+                newMoles[index] = { state: 'hidden' }; // Hide the mole.
+                return newMoles;
+            });
+            return; // Exit early as special action has been handled.
+        }
+        
+        // Normal whack logic if no special action was taken.
         setMoles(prev => {
-            const newMoles = prev.map(m => ({...m})); // Deep copy
-            newMoles[index] = { state: 'hidden' };
+            const newMoles = prev.map(m => ({...m}));
+            newMoles[index] = { state: 'hidden' }; // Hide the whacked mole.
             return newMoles;
         });
 
-        // Easter egg logic
-        if (username.toLowerCase() === 'richard heart' && moleImageUrl === RICHARD_HEART_IMAGE_URL && moleType === 'safe') {
-            if (unlockAudioRef.current && !isMuted) {
-                unlockAudioRef.current.currentTime = 0; // Rewind to start
-                unlockAudioRef.current.volume = 0.7;
-                unlockAudioRef.current.play().catch(error => console.error("Unlock sound play failed:", error));
-            }
-            // Using setTimeout to ensure toast appears after other state updates
-            setTimeout(() => {
-                toast({ 
-                    title: <span className="flex items-center gap-1"><KeyRound size={18}/> Easter Egg Unlocked!</span>, 
-                    description: "You found a secret!", 
-                    variant: "success", 
-                    duration: 4000 
-                });
-            },0);
-            // For the easter egg, we might not want to penalize the score.
-            // The scoring below will handle the normal cases.
-             // No score change or toast for the easter egg click itself, just the sound and success toast.
-            return; // Exit early to prevent normal scoring logic for this specific click
-        }
-
-
+        // Update score based on mole type.
         if (moleType === 'scammer') {
-            setScore(prevScore => prevScore + 10);
+            setScore(prevScore => prevScore + 10); // Increase score for whacking a scammer.
         } else if (moleType === 'safe') {
-            setScore(prevScore => Math.max(0, prevScore - 5));
+            setScore(prevScore => Math.max(0, prevScore - 5)); // Decrease score for whacking a safe mole.
+             // Display a toast message for whacking a safe mole.
              setTimeout(() => {
                 toast({ title: "Ouch!", description: "Don't hit the safe ones! (-5 points)", variant: "destructive", duration: 1500 });
             }, 0);
@@ -266,46 +274,46 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
     }, [timeLeft, isPlaying, score, stopGame]);
 
     React.useEffect(() => {
-        // Initialize audio ref for game music
-        if (!audioRef.current) {
-            audioRef.current = new Audio();
-            audioRef.current.src = "https://audio.jukehost.co.uk/dv0ART9pPj4xB1M03ig2v0go15fuT2wo"; 
-            audioRef.current.loop = true;
-            audioRef.current.preload = "auto";
-        }
-        // Initialize audio ref for unlock sound
-        if (!unlockAudioRef.current) {
-            unlockAudioRef.current = new Audio();
-            unlockAudioRef.current.src = DOOR_UNLOCK_SOUND_URL;
-            unlockAudioRef.current.preload = "auto";
-        }
+        const gameMusicElement = new Audio("https://audio.jukehost.co.uk/dv0ART9pPj4xB1M03ig2v0go15fuT2wo");
+        gameMusicElement.loop = true;
+        gameMusicElement.preload = "auto";
+        audioRef.current = gameMusicElement;
 
-        // Set initial mute state for both audio elements
-        if (audioRef.current) audioRef.current.muted = isMuted;
-        if (unlockAudioRef.current) unlockAudioRef.current.muted = isMuted;
-        
+        const unlockSoundElement = new Audio(DOOR_UNLOCK_SOUND_URL);
+        unlockSoundElement.preload = "auto";
+        unlockAudioRef.current = unlockSoundElement;
 
-        // Cleanup timers and audio on unmount
         return () => {
+            gameMusicElement.pause();
+            gameMusicElement.src = "";
+            unlockSoundElement.pause();
+            unlockSoundElement.src = "";
+            audioRef.current = null;
+            unlockAudioRef.current = null;
             cleanupTimers();
-            pauseAudio();
-            if (audioRef.current) {
-                audioRef.current.src = ""; 
-                audioRef.current = null;
-            }
-            if (unlockAudioRef.current) {
-                unlockAudioRef.current.pause();
-                unlockAudioRef.current.src = "";
-                unlockAudioRef.current = null;
-            }
         };
-    }, [isMuted]); // isMuted dependency ensures mute state is correctly applied on init and change
+    }, [cleanupTimers]);
+
+    React.useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.muted = isMuted;
+            if (isPlaying && !isMuted) {
+                audioRef.current.play().catch(error => console.error("Game music play failed:", error));
+            } else {
+                audioRef.current.pause();
+            }
+        }
+        if (unlockAudioRef.current) {
+            unlockAudioRef.current.muted = isMuted;
+        }
+    }, [isMuted, isPlaying]);
+
 
     const handleGameButtonClick = () => {
         if (isPlaying) {
-            stopGame(score); 
+            stopGame(score);
         } else {
-            startGame(); 
+            startGame();
         }
     };
 
@@ -315,11 +323,11 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                 <CardTitle className="flex items-center gap-2">
                     <Target className="text-primary" /> Whack-a-Scammer
                 </CardTitle>
-                <CardDescription className="md:text-base"> 
+                <CardDescription className="md:text-base">
                     Click the scammer images, avoid the safe ones. Earn {XP_PER_POINT} XP per point.
                 </CardDescription>
                 {gameCompleted && !isPlaying && (
-                    <Badge variant="default" className="bg-accent text-accent-foreground flex items-center gap-1 w-fit mt-2">
+                    <Badge variant="success" className="flex items-center gap-1 w-fit mt-2">
                         <CheckSquare size={16} /> XP Awarded
                     </Badge>
                 )}
@@ -332,13 +340,13 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 w-full max-w-xs aspect-square bg-muted/20 p-2 rounded-lg border"> 
+                <div className="grid grid-cols-3 gap-2 w-full max-w-xs aspect-square bg-muted/20 p-2 rounded-lg border">
                     {moles.map((mole, index) => (
                         <Button
                             key={index}
                             variant="outline"
                             className={cn(
-                                "aspect-square h-auto w-full flex items-center justify-center transition-all duration-100 ease-out relative overflow-hidden border-2 p-0", 
+                                "aspect-square h-auto w-full flex items-center justify-center transition-all duration-100 ease-out relative overflow-hidden border-2 p-0",
                                 "hover:bg-accent/20 active:scale-95",
                                 mole.state === 'hidden' ? 'bg-card hover:bg-card/90' : 'bg-background',
                                 mole.state === 'scammer' ? 'border-destructive/50 hover:bg-destructive/10' : 'border-border',
@@ -354,9 +362,9 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
                                 <Image
                                     src={mole.imageUrl}
                                     alt={mole.state}
-                                    layout="fill" 
-                                    objectFit="contain" 
-                                    className="p-1" 
+                                    layout="fill"
+                                    objectFit="contain"
+                                    className="p-1"
                                     data-ai-hint={mole.state === 'scammer' ? 'cartoon monster' : 'cartoon character'}
                                     unoptimized
                                 />
@@ -367,7 +375,7 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
 
                  <div className="flex items-center gap-4 mt-6">
                      <Button
-                         onClick={handleGameButtonClick} 
+                         onClick={handleGameButtonClick}
                          size="lg"
                          variant={isPlaying ? "outline" : "default"}
                      >
@@ -402,4 +410,3 @@ export function WhackAScammerGame({ className, challengeId }: WhackAScammerGameP
         </Card>
     );
 }
-
