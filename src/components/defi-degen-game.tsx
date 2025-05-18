@@ -712,6 +712,12 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                     </div>
                                 </div>
                             </Button>
+                            {/* Conditional message for high score */}
+                            {gameState.balance > 10000 && (
+                                <p className="mt-4 text-center font-serif italic text-base text-primary-foreground">
+                                    &quot;When Richard arrives and exposes the moles...privacy appears&quot;
+                                </p>
+                            )}
                         </div>
                     )}
                 </CardContent>
