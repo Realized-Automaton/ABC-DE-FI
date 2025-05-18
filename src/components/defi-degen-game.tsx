@@ -5,7 +5,7 @@ import * as React from 'react';
 import Image from 'next/image'; // Import next/image
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, DollarSign, TrendingUp, TrendingDown, Play, RefreshCw, Send, LineChart as LineChartIcon, Info, HelpCircle, Image as ImageIconLucide } from 'lucide-react'; // Renamed Image to ImageIconLucide
+import { Brain, DollarSign, TrendingUp, TrendingDown, Play, RefreshCw, Send, LineChart as LineChartIcon, Info, HelpCircle, Image as ImageIconLucide, KeyRound } from 'lucide-react'; // Renamed Image to ImageIconLucide, Added KeyRound
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/context/user-context';
@@ -171,7 +171,7 @@ const chartConfig = {
 
 export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGameProps) {
     const { toast } = useToast();
-    const { addXp, username } = useUser();
+    const { addXp, username, activateEasterEgg } = useUser();
     const [gameState, setGameState] = React.useState<GameState>(INITIAL_STATE);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [isFinished, setIsFinished] = React.useState(false);
@@ -486,33 +486,40 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
          )}>
             <div className="relative z-10 flex flex-col flex-1">
                  <CardHeader className="bg-transparent">
-                    <div className="flex justify-between items-start">
-                        <div className="flex-1 text-center">
-                            <CardTitle className="flex items-center justify-center gap-2 text-lg md:text-xl text-primary-foreground">
-                                <TrendingUp className="text-accent" /> DeFi Degen: Survive the Cycle
-                            </CardTitle>
-                            <CardDescription className="text-sm md:text-base text-primary-foreground/80">
-                                🧠💸 &quot;Think you&apos;re built for a 10x? Prove it.&quot; | Quest ID: {questId}
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={handleRestartGame} className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10">
-                                <RefreshCw size={16} />
-                                <span className="sr-only">Restart Game</span>
-                            </Button>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10">
-                                        <HelpCircle size={16} />
-                                        <span className="sr-only">Game Info</span>
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent side="top" align="end" className="w-80 text-base bg-popover text-popover-foreground">
-                                    <p>Start with ${INITIAL_BALANCE} DAI and survive {MAX_DAYS} days. React to market events, invest in projects, and avoid scams. Your balance changes daily. Use the slider to decide how much % of your balance to risk on 'Invest' actions. Reach the end without getting rekt!</p>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    </div>
+                     {/* Mobile first: Buttons stack vertically, then title, then description */}
+                     <div className="flex flex-col items-center gap-y-2 sm:flex-row sm:justify-between sm:items-start">
+                         {/* Buttons Container (Order 1 on mobile, Order 2 on sm and up) */}
+                         <div className="flex items-center gap-2 order-1 sm:order-2 self-stretch sm:self-auto justify-end w-full sm:w-auto">
+                             <Button variant="ghost" size="icon" onClick={handleRestartGame} className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10">
+                                 <RefreshCw size={16} />
+                                 <span className="sr-only">Restart Game</span>
+                             </Button>
+                             <Popover>
+                                 <PopoverTrigger asChild>
+                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10">
+                                         <HelpCircle size={16} />
+                                         <span className="sr-only">Game Info</span>
+                                     </Button>
+                                 </PopoverTrigger>
+                                 <PopoverContent side="top" align="end" className="w-80 text-base bg-popover text-popover-foreground">
+                                     <p>Start with ${INITIAL_BALANCE} DAI and survive {MAX_DAYS} days. React to market events, invest in projects, and avoid scams. Your balance changes daily. Use the slider to decide how much % of your balance to risk on 'Invest' actions. Reach the end without getting rekt!</p>
+                                 </PopoverContent>
+                             </Popover>
+                         </div>
+                         {/* Title and Description Container (Order 2 on mobile, Order 1 on sm and up) */}
+                         <div className="flex-1 text-center order-2 sm:order-1">
+                             <CardTitle className="flex flex-col items-center text-center text-lg sm:text-xl md:text-2xl text-primary-foreground gap-1">
+                                 {/* Single line for title with flex-wrap for icons if needed */}
+                                 <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                     <TrendingUp className="text-accent h-5 w-5 md:h-6 md:w-6" />
+                                     <span className="whitespace-nowrap">DeFi Degen: Survive the Cycle</span>
+                                 </div>
+                             </CardTitle>
+                             <CardDescription className="text-xs sm:text-sm md:text-base text-primary-foreground/80 mt-1">
+                                 🧠💸 &quot;Think you&apos;re built for a 10x? Prove it.&quot; | Quest ID: {questId}
+                             </CardDescription>
+                         </div>
+                     </div>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col justify-between space-y-4">
 
@@ -664,16 +671,15 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
 
                     {isFinished && (
                          <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-4">
-                            {isCompleted && earnedXp > 0 && (
-                                <Badge variant="success" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
-                                     Completed
-                                 </Badge>
-                             )}
-                             {!isCompleted && earnedXp === 0 && (
-                                <Badge variant="default" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
-                                     Finished
-                                 </Badge>
-                             )}
+                             {isCompleted && earnedXp > 0 ? (
+                                 <Badge variant="success" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
+                                      Completed
+                                  </Badge>
+                              ) : !isCompleted && earnedXp === 0 && (
+                                 <Badge variant="default" className="w-fit text-sm px-2 py-1 bg-background/20 text-primary-foreground mx-auto">
+                                      Finished
+                                  </Badge>
+                              )}
                              <h3 className="text-3xl font-semibold text-primary-foreground mt-2">Cycle Ended!</h3>
                              <p className="text-lg text-primary-foreground/80 text-center mb-2">
                                 {gameState.lastActionStatus || "Game Over"}
@@ -725,4 +731,3 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
         </Card>
     );
 }
-
