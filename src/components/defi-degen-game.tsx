@@ -492,7 +492,7 @@ export function DeFiDegenGame({ className, questId, xpReward }: DeFiDegenGamePro
                                 <TrendingUp className="text-accent" /> DeFi Degen: Survive the Cycle
                             </CardTitle>
                             <CardDescription className="text-sm md:text-base text-primary-foreground/80">
-                                🧠💸 &quot;Think you&apos;re built different? Prove it.&quot; | Quest ID: {questId}
+                                🧠💸 &quot;Think you&apos;re built for a 10x? Prove it.&quot; | Quest ID: {questId}
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
